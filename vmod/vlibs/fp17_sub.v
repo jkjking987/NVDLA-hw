@@ -1,0 +1,247 @@
+// +FHDR------------------------------------------------------------
+//                 Copyright (c) 2026 Wolley Inc.
+//                       ALL RIGHTS RESERVED
+// -----------------------------------------------------------------
+// Filename      : fp17_sub.v
+// Author        : Wolley Hardware Team
+// Created On    : 2026/04/04
+// -----------------------------------------------------------------
+// Description:
+//   3-stage floating-point subtractor for fp17 (1 sign + 6 expo + 10 mantissa)
+//   Implements FpSub<6,10> algorithm from nvdla_float.h
+//   Subtraction = addition with negated b
+// +FHDR------------------------------------------------------------
+
+module fp17_sub (
+    nvdla_core_clk,
+    nvdla_core_rstn,
+    chn_a_rsc_z,
+    chn_a_rsc_vz,
+    chn_a_rsc_lz,
+    chn_b_rsc_z,
+    chn_b_rsc_vz,
+    chn_b_rsc_lz,
+    chn_o_rsc_z,
+    chn_o_rsc_vz,
+    chn_o_rsc_lz
+);
+
+    parameter EXPO_WIDTH = 6;
+    parameter MANT_WIDTH = 10;
+    parameter FP_WIDTH = 17;
+    localparam K_EXPO_MAX = (1 << EXPO_WIDTH) - 1;
+    localparam K_EXPO_BIAS = (1 << (EXPO_WIDTH - 1)) - 1;
+    localparam K_MANT_MORE_WIDTH = MANT_WIDTH + 2;
+    localparam INTERNAL_MANT_WIDTH = K_MANT_MORE_WIDTH + MANT_WIDTH + 1;
+
+    input nvdla_core_clk;
+    input nvdla_core_rstn;
+    input  [FP_WIDTH-1:0] chn_a_rsc_z;
+    input                 chn_a_rsc_vz;
+    output                chn_a_rsc_lz;
+    input  [FP_WIDTH-1:0] chn_b_rsc_z;
+    input                 chn_b_rsc_vz;
+    output                chn_b_rsc_lz;
+    output [FP_WIDTH-1:0] chn_o_rsc_z;
+    input                 chn_o_rsc_vz;
+    output                chn_o_rsc_lz;
+
+    wire chn_a_rdy;
+    wire chn_b_rdy;
+    wire inputAccepted;
+    reg output_valid_q;
+    reg s1_v;
+    reg s2_v;
+    reg s3_v;
+
+    reg        s1_a_sign_q;
+    reg [EXPO_WIDTH-1:0] s1_a_expo_q;
+    reg [MANT_WIDTH-1:0] s1_a_mant_q;
+    reg        s1_b_sign_q;
+    reg [EXPO_WIDTH-1:0] s1_b_expo_q;
+    reg [MANT_WIDTH-1:0] s1_b_mant_q;
+
+    reg        s2_a_greater_q;
+    reg        s2_is_addition_q;
+    reg  [1:0] s2_o_sign_q;
+    reg  [EXPO_WIDTH-1:0] s2_o_expo_q;
+    reg  [INTERNAL_MANT_WIDTH-1:0] s2_int_mant_q;
+    reg        s2_overflow_q;
+
+    reg  [1:0] s3_o_sign_q;
+    reg  [EXPO_WIDTH-1:0] s3_o_expo_q;
+    reg  [MANT_WIDTH-1:0] s3_o_mant_q;
+    reg [FP_WIDTH-1:0] chn_o_rsc_z_q;
+
+    assign chn_a_rdy = chn_o_rsc_vz;
+    assign chn_b_rdy = chn_o_rsc_vz;
+    assign inputAccepted = chn_o_rsc_vz && chn_a_rsc_vz && chn_b_rsc_vz;
+    assign chn_a_rsc_lz = chn_o_rsc_vz && chn_a_rsc_vz;
+    assign chn_b_rsc_lz = chn_o_rsc_vz && chn_b_rsc_vz;
+    assign chn_o_rsc_lz = output_valid_q;
+    assign chn_o_rsc_z = chn_o_rsc_z_q;
+
+    always @(posedge nvdla_core_clk or negedge nvdla_core_rstn)
+        if (!nvdla_core_rstn) output_valid_q <= 1'b0;
+        else output_valid_q <= s3_v;
+
+    always @(posedge nvdla_core_clk or negedge nvdla_core_rstn)
+        if (!nvdla_core_rstn) s1_v <= 1'b0;
+        else s1_v <= (s3_v ? 1'b0 : (inputAccepted ? 1'b1 : s1_v));
+
+    always @(posedge nvdla_core_clk or negedge nvdla_core_rstn) begin
+        if (!nvdla_core_rstn) begin
+            s1_a_sign_q <= 1'b0;
+            s1_a_expo_q <= {EXPO_WIDTH{1'b0}};
+            s1_a_mant_q <= {MANT_WIDTH{1'b0}};
+            s1_b_sign_q <= 1'b0;
+            s1_b_expo_q <= {EXPO_WIDTH{1'b0}};
+            s1_b_mant_q <= {MANT_WIDTH{1'b0}};
+        end else if (inputAccepted) begin
+            s1_a_sign_q <= chn_a_rsc_z[FP_WIDTH-1];
+            s1_a_expo_q <= chn_a_rsc_z[FP_WIDTH-2:MANT_WIDTH];
+            s1_a_mant_q <= chn_a_rsc_z[MANT_WIDTH-1:0];
+            // For subtraction, negate b's sign
+            s1_b_sign_q <= ~chn_b_rsc_z[FP_WIDTH-1];
+            s1_b_expo_q <= chn_b_rsc_z[FP_WIDTH-2:MANT_WIDTH];
+            s1_b_mant_q <= chn_b_rsc_z[MANT_WIDTH-1:0];
+        end
+    end
+
+    always @(posedge nvdla_core_clk or negedge nvdla_core_rstn)
+        if (!nvdla_core_rstn) s2_v <= 1'b0;
+        else s2_v <= (s3_v ? 1'b0 : s1_v);
+
+    wire        s2_a_greater;
+    wire        s2_is_addition;
+    wire [1:0]  s2_o_sign;
+    wire [EXPO_WIDTH-1:0] s2_o_expo;
+    wire [INTERNAL_MANT_WIDTH-1:0] s2_int_mant;
+    wire        s2_overflow;
+
+    assign s2_a_greater = (s1_a_expo_q > s1_b_expo_q) ||
+                          ((s1_a_expo_q == s1_b_expo_q) && (s1_a_mant_q >= s1_b_mant_q));
+    assign s2_o_expo = s2_a_greater ? s1_a_expo_q : s1_b_expo_q;
+    assign s2_o_sign = s2_a_greater ? {1'b0, s1_a_sign_q} : {1'b0, s1_b_sign_q};
+    assign s2_is_addition = (s1_a_sign_q == s1_b_sign_q);
+
+    wire [MANT_WIDTH:0] a_mant_p1;
+    wire [MANT_WIDTH:0] b_mant_p1;
+    assign a_mant_p1 = (s1_a_expo_q == {EXPO_WIDTH{1'b0}} && s1_a_mant_q == {MANT_WIDTH{1'b0}})
+                       ? {1'b0, s1_a_mant_q} : {1'b1, s1_a_mant_q};
+    assign b_mant_p1 = (s1_b_expo_q == {EXPO_WIDTH{1'b0}} && s1_b_mant_q == {MANT_WIDTH{1'b0}})
+                       ? {1'b0, s1_b_mant_q} : {1'b1, s1_b_mant_q};
+
+    wire [EXPO_WIDTH-1:0] a_right_shift = s2_a_greater ? {EXPO_WIDTH{1'b0}} : (s1_b_expo_q - s1_a_expo_q);
+    wire [EXPO_WIDTH-1:0] b_right_shift = s2_a_greater ? (s1_a_expo_q - s1_b_expo_q) : {EXPO_WIDTH{1'b0}};
+    wire [EXPO_WIDTH:0] a_left_shift = K_MANT_MORE_WIDTH - a_right_shift;
+    wire [EXPO_WIDTH:0] b_left_shift = K_MANT_MORE_WIDTH - b_right_shift;
+
+    wire [INTERNAL_MANT_WIDTH-1:0] a_int_mant = ({1'b0, a_mant_p1} << a_left_shift);
+    wire [INTERNAL_MANT_WIDTH-1:0] b_int_mant = ({1'b0, b_mant_p1} << b_left_shift);
+    wire [INTERNAL_MANT_WIDTH-1:0] addend_larger  = s2_a_greater ? a_int_mant : b_int_mant;
+    wire [INTERNAL_MANT_WIDTH-1:0] addend_smaller = s2_a_greater ? b_int_mant : a_int_mant;
+    wire [INTERNAL_MANT_WIDTH:0] int_mant_p1 = s2_is_addition
+                         ? ({1'b0, addend_larger} + {1'b0, addend_smaller})
+                         : ({1'b0, addend_larger} - {1'b0, addend_smaller});
+
+    assign s2_overflow = int_mant_p1[INTERNAL_MANT_WIDTH];
+    assign s2_int_mant = s2_overflow ? (int_mant_p1[INTERNAL_MANT_WIDTH-1:0] >> 1) : int_mant_p1[INTERNAL_MANT_WIDTH-1:0];
+
+    always @(posedge nvdla_core_clk or negedge nvdla_core_rstn) begin
+        if (!nvdla_core_rstn) begin
+            s2_a_greater_q <= 1'b0;
+            s2_is_addition_q <= 1'b0;
+            s2_o_sign_q <= 2'b0;
+            s2_o_expo_q <= {EXPO_WIDTH{1'b0}};
+            s2_int_mant_q <= {INTERNAL_MANT_WIDTH{1'b0}};
+            s2_overflow_q <= 1'b0;
+        end else begin
+            s2_a_greater_q <= s2_a_greater;
+            s2_is_addition_q <= s2_is_addition;
+            s2_o_sign_q <= s2_o_sign;
+            s2_o_expo_q <= s2_o_expo;
+            s2_int_mant_q <= s2_int_mant;
+            s2_overflow_q <= s2_overflow;
+        end
+    end
+
+    always @(posedge nvdla_core_clk or negedge nvdla_core_rstn)
+        if (!nvdla_core_rstn) s3_v <= 1'b0;
+        else s3_v <= s2_v;
+
+    wire s2_a_is_nan = (s1_a_expo_q == {EXPO_WIDTH{1'b1}}) && (s1_a_mant_q != {MANT_WIDTH{1'b0}});
+    wire s2_b_is_nan = (s1_b_expo_q == {EXPO_WIDTH{1'b1}}) && (s1_b_mant_q != {MANT_WIDTH{1'b0}});
+    wire s2_a_is_inf = (s1_a_expo_q == {EXPO_WIDTH{1'b1}}) && (s1_a_mant_q == {MANT_WIDTH{1'b0}});
+    wire s2_b_is_inf = (s1_b_expo_q == {EXPO_WIDTH{1'b1}}) && (s1_b_mant_q == {MANT_WIDTH{1'b0}});
+    wire s2_a_is_zero = (s1_a_expo_q == {EXPO_WIDTH{1'b0}}) && (s1_a_mant_q == {MANT_WIDTH{1'b0}});
+    wire s2_b_is_zero = (s1_b_expo_q == {EXPO_WIDTH{1'b0}}) && (s1_b_mant_q == {MANT_WIDTH{1'b0}});
+
+    wire [$clog2(INTERNAL_MANT_WIDTH)-1:0] lead_zeros;
+    wire mant_is_zero = (s2_int_mant_q == {INTERNAL_MANT_WIDTH{1'b0}});
+    assign lead_zeros =
+        (s2_int_mant_q[INTERNAL_MANT_WIDTH-1]) ? 5'd0 :
+        (s2_int_mant_q[INTERNAL_MANT_WIDTH-2]) ? 5'd1 :
+        (s2_int_mant_q[INTERNAL_MANT_WIDTH-3]) ? 5'd2 :
+        (s2_int_mant_q[INTERNAL_MANT_WIDTH-4]) ? 5'd3 :
+        (s2_int_mant_q[INTERNAL_MANT_WIDTH-5]) ? 5'd4 :
+        (s2_int_mant_q[INTERNAL_MANT_WIDTH-6]) ? 5'd5 :
+        (s2_int_mant_q[INTERNAL_MANT_WIDTH-7]) ? 5'd6 :
+        (s2_int_mant_q[INTERNAL_MANT_WIDTH-8]) ? 5'd7 :
+        (s2_int_mant_q[INTERNAL_MANT_WIDTH-9]) ? 5'd8 :
+        (s2_int_mant_q[INTERNAL_MANT_WIDTH-10]) ? 5'd9 :
+        (s2_int_mant_q[INTERNAL_MANT_WIDTH-11]) ? 5'd10 :
+        (s2_int_mant_q[INTERNAL_MANT_WIDTH-12]) ? 5'd11 :
+        (s2_int_mant_q[INTERNAL_MANT_WIDTH-13]) ? 5'd12 :
+        (s2_int_mant_q[INTERNAL_MANT_WIDTH-14]) ? 5'd13 :
+        (s2_int_mant_q[INTERNAL_MANT_WIDTH-15]) ? 5'd14 :
+        (s2_int_mant_q[INTERNAL_MANT_WIDTH-16]) ? 5'd15 :
+        (s2_int_mant_q[INTERNAL_MANT_WIDTH-17]) ? 5'd16 :
+        (s2_int_mant_q[INTERNAL_MANT_WIDTH-18]) ? 5'd17 :
+        (s2_int_mant_q[INTERNAL_MANT_WIDTH-19]) ? 5'd18 :
+        (s2_int_mant_q[INTERNAL_MANT_WIDTH-20]) ? 5'd19 :
+        (s2_int_mant_q[INTERNAL_MANT_WIDTH-21]) ? 5'd20 :
+        (s2_int_mant_q[INTERNAL_MANT_WIDTH-22]) ? 5'd21 :
+        5'd22;
+
+    wire [EXPO_WIDTH-1:0] s3_expo_norm = s2_overflow_q ? (s2_o_expo_q + 1) : (mant_is_zero ? {EXPO_WIDTH{1'b0}} : (s2_o_expo_q - lead_zeros));
+    wire [INTERNAL_MANT_WIDTH-1:0] s3_int_mant_norm = s2_overflow_q ? s2_int_mant_q : (mant_is_zero ? {INTERNAL_MANT_WIDTH{1'b0}} : (s2_int_mant_q << lead_zeros));
+
+    wire [MANT_WIDTH:0] rounded_mant_p1;
+    wire [MANT_WIDTH:0] mant_top = s3_int_mant_norm[INTERNAL_MANT_WIDTH-1:MANT_WIDTH];
+    wire guard_bit = s3_int_mant_norm[MANT_WIDTH-1];
+    wire sticky_bit = |s3_int_mant_norm[MANT_WIDTH-2:0];
+    wire lsb_bit = mant_top[0];
+    wire round_up = guard_bit && (sticky_bit || lsb_bit);
+    assign rounded_mant_p1 = mant_top + (round_up ? (MANT_WIDTH+1'd1) : (MANT_WIDTH+1'd0));
+    wire rounding_overflow = rounded_mant_p1[MANT_WIDTH];
+    wire [MANT_WIDTH-1:0] final_mant = rounded_mant_p1[MANT_WIDTH-1:0];
+    wire [EXPO_WIDTH-1:0] final_expo = rounding_overflow ? (s3_expo_norm + 1) : s3_expo_norm;
+
+    wire is_special = s2_a_is_nan || s2_b_is_nan;
+    wire [1:0] result_sign = is_special ? (s2_a_is_nan ? {1'b0, s1_a_sign_q} : {1'b0, s1_b_sign_q}) :
+                              (s2_a_is_zero ? {1'b0, s1_b_sign_q} : s2_b_is_zero ? {1'b0, s1_a_sign_q} : {1'b0, s2_o_sign_q[0]});
+    wire [EXPO_WIDTH-1:0] result_expo = is_special ? (s2_a_is_nan ? s1_a_expo_q : s1_b_expo_q) :
+                                         (s2_a_is_zero ? s1_b_expo_q : s2_b_is_zero ? s1_a_expo_q : final_expo);
+    wire [MANT_WIDTH-1:0] result_mant = is_special ? (s2_a_is_nan ? s1_a_mant_q : s1_b_mant_q) :
+                                        (s2_a_is_zero ? s1_b_mant_q : s2_b_is_zero ? s1_a_mant_q : final_mant);
+
+    wire [FP_WIDTH-1:0] result_packed = {result_sign[0], result_expo, result_mant};
+
+    always @(posedge nvdla_core_clk or negedge nvdla_core_rstn) begin
+        if (!nvdla_core_rstn) begin
+            s3_o_sign_q <= 2'b0;
+            s3_o_expo_q <= {EXPO_WIDTH{1'b0}};
+            s3_o_mant_q <= {MANT_WIDTH{1'b0}};
+        end else begin
+            s3_o_sign_q <= result_sign;
+            s3_o_expo_q <= result_expo;
+            s3_o_mant_q <= result_mant;
+        end
+    end
+
+    always @(posedge nvdla_core_clk or negedge nvdla_core_rstn)
+        if (!nvdla_core_rstn) chn_o_rsc_z_q <= {FP_WIDTH{1'b0}};
+        else if (s3_v) chn_o_rsc_z_q <= result_packed;
+
+endmodule
