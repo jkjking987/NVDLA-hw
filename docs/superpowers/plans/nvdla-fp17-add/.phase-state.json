@@ -1,19 +1,23 @@
 {
   "project": "nvdla-fp17-add",
   "project_path": "c:/Users/jkjki/Desktop/NVDLA-hw",
-  "current_phase": "planning",
+  "current_phase": "verification",
   "phases": {
     "brainstorming": "complete",
-    "planning": "in_progress",
-    "execution": "pending",
-    "verification": "pending",
+    "planning": "complete",
+    "execution": "complete",
+    "verification": "in_progress",
     "debug": "pending"
   },
   "artifacts": {
     "spec": "docs/superpowers/specs/2026-04-04-nvdla-fp17-add-design.md",
     "c_reference": "cmod/hls/include/nvdla_float.h",
-    "rtl": null,
+    "rtl": "vmod/vlibs/fp17_add.v",
     "dpi_report": null
+  },
+  "notes": {
+    "lint": "verilator not available - deferred",
+    "commit": "8a46137"
   },
   "created_at": "2026-04-04T00:00:00Z",
   "updated_at": "2026-04-04T00:00:00Z"
