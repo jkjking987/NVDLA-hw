@@ -92,7 +92,8 @@ module cdp_icvt_ref_tb;
         while (!chn_data_in_rdy) @(posedge nvdla_core_clk);
         chn_data_in_vld = 0;
 
-        @(posedge chn_data_out_vld);
+        // Wait for output - chn_data_out_vld is combinational, check after clock edge
+        while (!chn_data_out_vld) @(posedge nvdla_core_clk);
         if (chn_data_out == expected_trt) begin
             $display("PASS: Test 1 - ICVT result=%h (expected %h)", chn_data_out, expected_trt);
             pass_count = pass_count + 1;
@@ -108,7 +109,8 @@ module cdp_icvt_ref_tb;
         while (!chn_data_in_rdy) @(posedge nvdla_core_clk);
         chn_data_in_vld = 0;
 
-        @(posedge chn_data_out_vld);
+        // Wait for output - chn_data_out_vld is combinational, check after clock edge
+        while (!chn_data_out_vld) @(posedge nvdla_core_clk);
         if (chn_data_out == expected_trt) begin
             $display("PASS: Test 2 - ICVT result=%h (expected %h)", chn_data_out, expected_trt);
             pass_count = pass_count + 1;
