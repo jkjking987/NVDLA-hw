@@ -592,7 +592,7 @@ wire [31:0] d0_perf_wt_read_latency_rdat;
 wire [31:0] d0_cya_rdat;
 
 // Trigger detection
-wire        d0_op_enable_wren_d1;
+reg        d0_op_enable_wren_d1;
 
 //===============================================================
 // REG DECLARATIONS
