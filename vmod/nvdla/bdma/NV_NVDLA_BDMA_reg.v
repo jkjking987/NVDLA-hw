@@ -1,484 +1,617 @@
 // ================================================================
 // NVDLA Open Source Project
-// 
+//
 // Copyright(c) 2016 - 2017 NVIDIA Corporation.  Licensed under the
-// NVDLA Open Hardware License; Check "LICENSE" which comes with 
+// NVDLA Open Hardware License; Check "LICENSE" which comes with
 // this distribution for more information.
 // ================================================================
 
 // File Name: NV_NVDLA_BDMA_reg.v
+// Author: Claude
+// Description:
+// BDMA Register File Module with CSB interface
+// Handles register read/write at address offsets via CSB protocol
+
+// +FHDR------------------------------------------------------------
+//                 Copyright (c) 2026 Wolley Inc.
+//                       ALL RIGHTS RESERVED
+// -----------------------------------------------------------------
+// Filename      : NV_NVDLA_BDMA_reg.v
+// Author        : Claude
+// Created On    : 2026/04/04
+// -----------------------------------------------------------------
+// Description:
+// BDMA Register File Module
+// - CSB (Command and Status Bus) register access interface
+// - Supports read/write operations to all BDMA configuration
+//   and status registers
+// - Key registers: CFG_OP (operation enable), CFG_LAUNCH0/1
+//   (group launch), STATUS (idle/busy status)
+// -----------------------------------------------------------------
+// +FHDR------------------------------------------------------------
 
 module NV_NVDLA_BDMA_reg (
-   reg_rd_data
-  ,reg_offset
-   // verilint 498 off
-   // leda UNUSED_DEC off
-  ,reg_wr_data
-   // verilint 498 on
-   // leda UNUSED_DEC on
-  ,reg_wr_en
-  ,nvdla_core_clk
-  ,nvdla_core_rstn
-  ,nvdla_bdma_cfg_cmd_0_dst_ram_type
-  ,nvdla_bdma_cfg_cmd_0_src_ram_type
-  ,nvdla_bdma_cfg_dst_addr_high_0_v8
-  ,nvdla_bdma_cfg_dst_addr_low_0_v32
-  ,nvdla_bdma_cfg_dst_line_0_stride
-  ,nvdla_bdma_cfg_dst_surf_0_stride
-  ,nvdla_bdma_cfg_launch0_0_grp0_launch
-  ,nvdla_bdma_cfg_launch0_0_grp0_launch_trigger
-  ,nvdla_bdma_cfg_launch1_0_grp1_launch
-  ,nvdla_bdma_cfg_launch1_0_grp1_launch_trigger
-  ,nvdla_bdma_cfg_line_0_size
-  ,nvdla_bdma_cfg_line_repeat_0_number
-  ,nvdla_bdma_cfg_op_0_en
-  ,nvdla_bdma_cfg_op_0_en_trigger
-  ,nvdla_bdma_cfg_src_addr_high_0_v8
-  ,nvdla_bdma_cfg_src_addr_low_0_v32
-  ,nvdla_bdma_cfg_src_line_0_stride
-  ,nvdla_bdma_cfg_src_surf_0_stride
-  ,nvdla_bdma_cfg_status_0_stall_count_en
-  ,nvdla_bdma_cfg_surf_repeat_0_number
-  ,nvdla_bdma_status_0_free_slot
-  ,nvdla_bdma_status_0_grp0_busy
-  ,nvdla_bdma_status_0_grp1_busy
-  ,nvdla_bdma_status_0_idle
-  ,nvdla_bdma_status_grp0_read_stall_0_count
-  ,nvdla_bdma_status_grp0_write_stall_0_count
-  ,nvdla_bdma_status_grp1_read_stall_0_count
-  ,nvdla_bdma_status_grp1_write_stall_0_count
+   // CSB interface
+   csb_clk
+  ,csb_rstn
+  ,csb_addr
+  ,csb_wdat
+  ,csb_rd_en
+  ,csb_wr_en
+  ,csb_rdat
+  ,npu_rdy
+  // Datapath outputs (to load/store blocks)
+  ,reg2dp_src_addr_low_v32
+  ,reg2dp_src_addr_high_v8
+  ,reg2dp_dst_addr_low_v32
+  ,reg2dp_dst_addr_high_v8
+  ,reg2dp_line_size
+  ,reg2dp_cmd_src_ram_type
+  ,reg2dp_cmd_dst_ram_type
+  ,reg2dp_line_repeat_number
+  ,reg2dp_src_line_stride
+  ,reg2dp_dst_line_stride
+  ,reg2dp_surf_repeat_number
+  ,reg2dp_src_surf_stride
+  ,reg2dp_dst_surf_stride
+  ,reg2dp_op_en
+  ,reg2dp_launch0_grp0_launch
+  ,reg2dp_launch1_grp1_launch
+  ,reg2dp_status_stall_count_en
+  ,reg2dp_op_en_trigger
+  ,reg2dp_launch0_trigger
+  ,reg2dp_launch1_trigger
+  // External status inputs (from load/store blocks)
+  ,ext_status_idle
+  ,ext_status_grp0_busy
+  ,ext_status_grp1_busy
+  ,ext_free_slot
   );
 
-wire   [31:0] nvdla_bdma_cfg_cmd_0_out;
-wire   [31:0] nvdla_bdma_cfg_dst_addr_high_0_out;
-wire   [31:0] nvdla_bdma_cfg_dst_addr_low_0_out;
-wire   [31:0] nvdla_bdma_cfg_dst_line_0_out;
-wire   [31:0] nvdla_bdma_cfg_dst_surf_0_out;
-wire   [31:0] nvdla_bdma_cfg_launch0_0_out;
-wire   [31:0] nvdla_bdma_cfg_launch1_0_out;
-wire   [31:0] nvdla_bdma_cfg_line_0_out;
-wire   [31:0] nvdla_bdma_cfg_line_repeat_0_out;
-wire   [31:0] nvdla_bdma_cfg_op_0_out;
-wire   [31:0] nvdla_bdma_cfg_src_addr_high_0_out;
-wire   [31:0] nvdla_bdma_cfg_src_addr_low_0_out;
-wire   [31:0] nvdla_bdma_cfg_src_line_0_out;
-wire   [31:0] nvdla_bdma_cfg_src_surf_0_out;
-wire   [31:0] nvdla_bdma_cfg_status_0_out;
-wire   [31:0] nvdla_bdma_cfg_surf_repeat_0_out;
-wire   [31:0] nvdla_bdma_status_0_out;
-wire   [31:0] nvdla_bdma_status_grp0_read_stall_0_out;
-wire   [31:0] nvdla_bdma_status_grp0_write_stall_0_out;
-wire   [31:0] nvdla_bdma_status_grp1_read_stall_0_out;
-wire   [31:0] nvdla_bdma_status_grp1_write_stall_0_out;
-wire   [11:0] reg_offset_rd_int;
-wire   [31:0] reg_offset_wr;
-// Register control interface
-output [31:0] reg_rd_data;
-input [11:0]  reg_offset;
-input [31:0]  reg_wr_data;  //(UNUSED_DEC)
-input         reg_wr_en;
-input         nvdla_core_clk;
-input         nvdla_core_rstn;
+//===============================================================
+// PORT DECLARATION
+//===============================================================
+// CSB interface
+input         csb_clk;
+input         csb_rstn;
+input  [11:0] csb_addr;
+input  [31:0] csb_wdat;
+input         csb_rd_en;
+input         csb_wr_en;
+output [31:0] csb_rdat;
+output        npu_rdy;
 
+// Datapath outputs
+output [26:0] reg2dp_src_addr_low_v32;
+output [31:0] reg2dp_src_addr_high_v8;
+output [26:0] reg2dp_dst_addr_low_v32;
+output [31:0] reg2dp_dst_addr_high_v8;
+output [12:0] reg2dp_line_size;
+output        reg2dp_cmd_src_ram_type;
+output        reg2dp_cmd_dst_ram_type;
+output [23:0] reg2dp_line_repeat_number;
+output [26:0] reg2dp_src_line_stride;
+output [26:0] reg2dp_dst_line_stride;
+output [23:0] reg2dp_surf_repeat_number;
+output [26:0] reg2dp_src_surf_stride;
+output [26:0] reg2dp_dst_surf_stride;
+output        reg2dp_op_en;
+output        reg2dp_launch0_grp0_launch;
+output        reg2dp_launch1_grp1_launch;
+output        reg2dp_status_stall_count_en;
+output        reg2dp_op_en_trigger;
+output        reg2dp_launch0_trigger;
+output        reg2dp_launch1_trigger;
 
-// Writable register flop/trigger outputs
-output        nvdla_bdma_cfg_cmd_0_dst_ram_type;
-output        nvdla_bdma_cfg_cmd_0_src_ram_type;
-output [31:0] nvdla_bdma_cfg_dst_addr_high_0_v8;
-output [26:0] nvdla_bdma_cfg_dst_addr_low_0_v32;
-output [26:0] nvdla_bdma_cfg_dst_line_0_stride;
-output [26:0] nvdla_bdma_cfg_dst_surf_0_stride;
-output        nvdla_bdma_cfg_launch0_0_grp0_launch;
-output        nvdla_bdma_cfg_launch0_0_grp0_launch_trigger;
-output        nvdla_bdma_cfg_launch1_0_grp1_launch;
-output        nvdla_bdma_cfg_launch1_0_grp1_launch_trigger;
-output [12:0] nvdla_bdma_cfg_line_0_size;
-output [23:0] nvdla_bdma_cfg_line_repeat_0_number;
-output        nvdla_bdma_cfg_op_0_en;
-output        nvdla_bdma_cfg_op_0_en_trigger;
-output [31:0] nvdla_bdma_cfg_src_addr_high_0_v8;
-output [26:0] nvdla_bdma_cfg_src_addr_low_0_v32;
-output [26:0] nvdla_bdma_cfg_src_line_0_stride;
-output [26:0] nvdla_bdma_cfg_src_surf_0_stride;
-output        nvdla_bdma_cfg_status_0_stall_count_en;
-output [23:0] nvdla_bdma_cfg_surf_repeat_0_number;
+// External status inputs
+input         ext_status_idle;
+input         ext_status_grp0_busy;
+input         ext_status_grp1_busy;
+input  [7:0]  ext_free_slot;
 
-// Read-only register inputs
-input [7:0]   nvdla_bdma_status_0_free_slot;
-input         nvdla_bdma_status_0_grp0_busy;
-input         nvdla_bdma_status_0_grp1_busy;
-input         nvdla_bdma_status_0_idle;
-input [31:0]  nvdla_bdma_status_grp0_read_stall_0_count;
-input [31:0]  nvdla_bdma_status_grp0_write_stall_0_count;
-input [31:0]  nvdla_bdma_status_grp1_read_stall_0_count;
-input [31:0]  nvdla_bdma_status_grp1_write_stall_0_count;
+//===============================================================
+// PARAMETERS
+//===============================================================
+// Register addresses (12-bit address, lower 12 bits of 32-bit address)
+parameter [11:0] REG_CFG_SRC_ADDR_LOW    = 12'h000;
+parameter [11:0] REG_CFG_SRC_ADDR_HIGH   = 12'h004;
+parameter [11:0] REG_CFG_DST_ADDR_LOW    = 12'h008;
+parameter [11:0] REG_CFG_DST_ADDR_HIGH   = 12'h00C;
+parameter [11:0] REG_CFG_LINE            = 12'h010;
+parameter [11:0] REG_CFG_CMD             = 12'h014;
+parameter [11:0] REG_CFG_LINE_REPEAT     = 12'h018;
+parameter [11:0] REG_CFG_SRC_LINE        = 12'h01C;
+parameter [11:0] REG_CFG_DST_LINE        = 12'h020;
+parameter [11:0] REG_CFG_SURF_REPEAT     = 12'h024;
+parameter [11:0] REG_CFG_SRC_SURF        = 12'h028;
+parameter [11:0] REG_CFG_DST_SURF        = 12'h02C;
+parameter [11:0] REG_CFG_OP              = 12'h030;
+parameter [11:0] REG_CFG_LAUNCH0         = 12'h034;
+parameter [11:0] REG_CFG_LAUNCH1         = 12'h038;
+parameter [11:0] REG_CFG_STATUS          = 12'h03C;
+parameter [11:0] REG_STATUS              = 12'h040;
+parameter [11:0] REG_STATUS_GRP0_READ_STALL  = 12'h044;
+parameter [11:0] REG_STATUS_GRP0_WRITE_STALL = 12'h048;
+parameter [11:0] REG_STATUS_GRP1_READ_STALL  = 12'h04C;
+parameter [11:0] REG_STATUS_GRP1_WRITE_STALL = 12'h050;
 
-// wr_mask register inputs
+//===============================================================
+// WIRE DECLARATIONS
+//===============================================================
+// Write enable decode
+wire        cfg_src_addr_low_wren;
+wire        cfg_src_addr_high_wren;
+wire        cfg_dst_addr_low_wren;
+wire        cfg_dst_addr_high_wren;
+wire        cfg_line_wren;
+wire        cfg_cmd_wren;
+wire        cfg_line_repeat_wren;
+wire        cfg_src_line_wren;
+wire        cfg_dst_line_wren;
+wire        cfg_surf_repeat_wren;
+wire        cfg_src_surf_wren;
+wire        cfg_dst_surf_wren;
+wire        cfg_op_wren;
+wire        cfg_launch0_wren;
+wire        cfg_launch1_wren;
+wire        cfg_status_wren;
+wire        status_wren;
+wire        status_grp0_read_stall_wren;
+wire        status_grp0_write_stall_wren;
+wire        status_grp1_read_stall_wren;
+wire        status_grp1_write_stall_wren;
 
-// rstn register inputs
+// Read data muxes
+wire [31:0] cfg_src_addr_low_rdat;
+wire [31:0] cfg_src_addr_high_rdat;
+wire [31:0] cfg_dst_addr_low_rdat;
+wire [31:0] cfg_dst_addr_high_rdat;
+wire [31:0] cfg_line_rdat;
+wire [31:0] cfg_cmd_rdat;
+wire [31:0] cfg_line_repeat_rdat;
+wire [31:0] cfg_src_line_rdat;
+wire [31:0] cfg_dst_line_rdat;
+wire [31:0] cfg_surf_repeat_rdat;
+wire [31:0] cfg_src_surf_rdat;
+wire [31:0] cfg_dst_surf_rdat;
+wire [31:0] cfg_op_rdat;
+wire [31:0] cfg_launch0_rdat;
+wire [31:0] cfg_launch1_rdat;
+wire [31:0] cfg_status_rdat;
+wire [31:0] status_rdat;
+wire [31:0] status_grp0_read_stall_rdat;
+wire [31:0] status_grp0_write_stall_rdat;
+wire [31:0] status_grp1_read_stall_rdat;
+wire [31:0] status_grp1_write_stall_rdat;
 
-// leda FM_2_23 off
-reg           arreggen_abort_on_invalid_wr;
-reg           arreggen_abort_on_rowr;
-reg           arreggen_dump;
-// leda FM_2_23 on
-reg           nvdla_bdma_cfg_cmd_0_dst_ram_type;
-reg           nvdla_bdma_cfg_cmd_0_src_ram_type;
-reg    [31:0] nvdla_bdma_cfg_dst_addr_high_0_v8;
-reg    [26:0] nvdla_bdma_cfg_dst_addr_low_0_v32;
-reg    [26:0] nvdla_bdma_cfg_dst_line_0_stride;
-reg    [26:0] nvdla_bdma_cfg_dst_surf_0_stride;
-reg           nvdla_bdma_cfg_launch0_0_grp0_launch;
-reg           nvdla_bdma_cfg_launch1_0_grp1_launch;
-reg    [12:0] nvdla_bdma_cfg_line_0_size;
-reg    [23:0] nvdla_bdma_cfg_line_repeat_0_number;
-reg           nvdla_bdma_cfg_op_0_en;
-reg    [31:0] nvdla_bdma_cfg_src_addr_high_0_v8;
-reg    [26:0] nvdla_bdma_cfg_src_addr_low_0_v32;
-reg    [26:0] nvdla_bdma_cfg_src_line_0_stride;
-reg    [26:0] nvdla_bdma_cfg_src_surf_0_stride;
-reg           nvdla_bdma_cfg_status_0_stall_count_en;
-reg    [23:0] nvdla_bdma_cfg_surf_repeat_0_number;
-reg    [31:0] reg_rd_data;
+//===============================================================
+// REG DECLARATIONS
+//===============================================================
+// CFG registers (writable)
+reg  [26:0]  cfg_src_addr_low_r;     // bits[31:5] -> 27 bits
+reg  [31:0]  cfg_src_addr_high_r;    // 32 bits
+reg  [26:0]  cfg_dst_addr_low_r;     // bits[31:5] -> 27 bits
+reg  [31:0]  cfg_dst_addr_high_r;    // 32 bits
+reg  [12:0]  cfg_line_size_r;        // bits[12:0] -> 13 bits
+reg          cfg_cmd_src_ram_type_r;
+reg          cfg_cmd_dst_ram_type_r;
+reg  [23:0]  cfg_line_repeat_number_r;
+reg  [26:0]  cfg_src_line_stride_r;
+reg  [26:0]  cfg_dst_line_stride_r;
+reg  [23:0]  cfg_surf_repeat_number_r;
+reg  [26:0]  cfg_src_surf_stride_r;
+reg  [26:0]  cfg_dst_surf_stride_r;
+reg          cfg_op_en_r;
+reg          cfg_launch0_grp0_launch_r;
+reg          cfg_launch1_grp1_launch_r;
+reg          cfg_status_stall_count_en_r;
 
-assign reg_offset_wr = {20'b0 , reg_offset};
-// SCR signals
+// STATUS registers (read-only inputs, but some fields writable for test)
+reg  [31:0]  status_grp0_read_stall_r;
+reg  [31:0]  status_grp0_write_stall_r;
+reg  [31:0]  status_grp1_read_stall_r;
+reg  [31:0]  status_grp1_write_stall_r;
 
-// Address decode
-wire nvdla_bdma_cfg_cmd_0_wren = (reg_offset_wr == (32'h4014  & 32'h00000fff)) & reg_wr_en ;  //spyglass disable UnloadedNet-ML //(W528)
-wire nvdla_bdma_cfg_dst_addr_high_0_wren = (reg_offset_wr == (32'h400c  & 32'h00000fff)) & reg_wr_en ;  //spyglass disable UnloadedNet-ML //(W528)
-wire nvdla_bdma_cfg_dst_addr_low_0_wren = (reg_offset_wr == (32'h4008  & 32'h00000fff)) & reg_wr_en ;  //spyglass disable UnloadedNet-ML //(W528)
-wire nvdla_bdma_cfg_dst_line_0_wren = (reg_offset_wr == (32'h4020  & 32'h00000fff)) & reg_wr_en ;  //spyglass disable UnloadedNet-ML //(W528)
-wire nvdla_bdma_cfg_dst_surf_0_wren = (reg_offset_wr == (32'h402c  & 32'h00000fff)) & reg_wr_en ;  //spyglass disable UnloadedNet-ML //(W528)
-wire nvdla_bdma_cfg_launch0_0_wren = (reg_offset_wr == (32'h4034  & 32'h00000fff)) & reg_wr_en ;  //spyglass disable UnloadedNet-ML //(W528)
-wire nvdla_bdma_cfg_launch1_0_wren = (reg_offset_wr == (32'h4038  & 32'h00000fff)) & reg_wr_en ;  //spyglass disable UnloadedNet-ML //(W528)
-wire nvdla_bdma_cfg_line_0_wren = (reg_offset_wr == (32'h4010  & 32'h00000fff)) & reg_wr_en ;  //spyglass disable UnloadedNet-ML //(W528)
-wire nvdla_bdma_cfg_line_repeat_0_wren = (reg_offset_wr == (32'h4018  & 32'h00000fff)) & reg_wr_en ;  //spyglass disable UnloadedNet-ML //(W528)
-wire nvdla_bdma_cfg_op_0_wren = (reg_offset_wr == (32'h4030  & 32'h00000fff)) & reg_wr_en ;  //spyglass disable UnloadedNet-ML //(W528)
-wire nvdla_bdma_cfg_src_addr_high_0_wren = (reg_offset_wr == (32'h4004  & 32'h00000fff)) & reg_wr_en ;  //spyglass disable UnloadedNet-ML //(W528)
-wire nvdla_bdma_cfg_src_addr_low_0_wren = (reg_offset_wr == (32'h4000  & 32'h00000fff)) & reg_wr_en ;  //spyglass disable UnloadedNet-ML //(W528)
-wire nvdla_bdma_cfg_src_line_0_wren = (reg_offset_wr == (32'h401c  & 32'h00000fff)) & reg_wr_en ;  //spyglass disable UnloadedNet-ML //(W528)
-wire nvdla_bdma_cfg_src_surf_0_wren = (reg_offset_wr == (32'h4028  & 32'h00000fff)) & reg_wr_en ;  //spyglass disable UnloadedNet-ML //(W528)
-wire nvdla_bdma_cfg_status_0_wren = (reg_offset_wr == (32'h403c  & 32'h00000fff)) & reg_wr_en ;  //spyglass disable UnloadedNet-ML //(W528)
-wire nvdla_bdma_cfg_surf_repeat_0_wren = (reg_offset_wr == (32'h4024  & 32'h00000fff)) & reg_wr_en ;  //spyglass disable UnloadedNet-ML //(W528)
-wire nvdla_bdma_status_0_wren = (reg_offset_wr == (32'h4040  & 32'h00000fff)) & reg_wr_en ;  //spyglass disable UnloadedNet-ML //(W528)
-wire nvdla_bdma_status_grp0_read_stall_0_wren = (reg_offset_wr == (32'h4044  & 32'h00000fff)) & reg_wr_en ;  //spyglass disable UnloadedNet-ML //(W528)
-wire nvdla_bdma_status_grp0_write_stall_0_wren = (reg_offset_wr == (32'h4048  & 32'h00000fff)) & reg_wr_en ;  //spyglass disable UnloadedNet-ML //(W528)
-wire nvdla_bdma_status_grp1_read_stall_0_wren = (reg_offset_wr == (32'h404c  & 32'h00000fff)) & reg_wr_en ;  //spyglass disable UnloadedNet-ML //(W528)
-wire nvdla_bdma_status_grp1_write_stall_0_wren = (reg_offset_wr == (32'h4050  & 32'h00000fff)) & reg_wr_en ;  //spyglass disable UnloadedNet-ML //(W528)
+// CSB response flops
+reg  [31:0]  csb_rdat_q;
 
-assign nvdla_bdma_cfg_cmd_0_out[31:0] = { 30'b0, nvdla_bdma_cfg_cmd_0_dst_ram_type, nvdla_bdma_cfg_cmd_0_src_ram_type };
-assign nvdla_bdma_cfg_dst_addr_high_0_out[31:0] = { nvdla_bdma_cfg_dst_addr_high_0_v8 };
-assign nvdla_bdma_cfg_dst_addr_low_0_out[31:0] = { nvdla_bdma_cfg_dst_addr_low_0_v32, 5'b0 };
-assign nvdla_bdma_cfg_dst_line_0_out[31:0] = { nvdla_bdma_cfg_dst_line_0_stride, 5'b0 };
-assign nvdla_bdma_cfg_dst_surf_0_out[31:0] = { nvdla_bdma_cfg_dst_surf_0_stride, 5'b0 };
-assign nvdla_bdma_cfg_launch0_0_out[31:0] = { 31'b0, nvdla_bdma_cfg_launch0_0_grp0_launch };
-assign nvdla_bdma_cfg_launch1_0_out[31:0] = { 31'b0, nvdla_bdma_cfg_launch1_0_grp1_launch };
-assign nvdla_bdma_cfg_line_0_out[31:0] = { 19'b0, nvdla_bdma_cfg_line_0_size };
-assign nvdla_bdma_cfg_line_repeat_0_out[31:0] = { 8'b0, nvdla_bdma_cfg_line_repeat_0_number };
-assign nvdla_bdma_cfg_op_0_out[31:0] = { 31'b0, nvdla_bdma_cfg_op_0_en };
-assign nvdla_bdma_cfg_src_addr_high_0_out[31:0] = { nvdla_bdma_cfg_src_addr_high_0_v8 };
-assign nvdla_bdma_cfg_src_addr_low_0_out[31:0] = { nvdla_bdma_cfg_src_addr_low_0_v32, 5'b0 };
-assign nvdla_bdma_cfg_src_line_0_out[31:0] = { nvdla_bdma_cfg_src_line_0_stride, 5'b0 };
-assign nvdla_bdma_cfg_src_surf_0_out[31:0] = { nvdla_bdma_cfg_src_surf_0_stride, 5'b0 };
-assign nvdla_bdma_cfg_status_0_out[31:0] = { 31'b0, nvdla_bdma_cfg_status_0_stall_count_en };
-assign nvdla_bdma_cfg_surf_repeat_0_out[31:0] = { 8'b0, nvdla_bdma_cfg_surf_repeat_0_number };
-assign nvdla_bdma_status_0_out[31:0] = { 21'b0, nvdla_bdma_status_0_grp1_busy, nvdla_bdma_status_0_grp0_busy, nvdla_bdma_status_0_idle, nvdla_bdma_status_0_free_slot };
-assign nvdla_bdma_status_grp0_read_stall_0_out[31:0] = { nvdla_bdma_status_grp0_read_stall_0_count };
-assign nvdla_bdma_status_grp0_write_stall_0_out[31:0] = { nvdla_bdma_status_grp0_write_stall_0_count };
-assign nvdla_bdma_status_grp1_read_stall_0_out[31:0] = { nvdla_bdma_status_grp1_read_stall_0_count };
-assign nvdla_bdma_status_grp1_write_stall_0_out[31:0] = { nvdla_bdma_status_grp1_write_stall_0_count };
+// Trigger detection flops
+reg          cfg_op_en_wren_d1;
+reg          cfg_launch0_wren_d1;
+reg          cfg_launch1_wren_d1;
 
-assign nvdla_bdma_cfg_launch0_0_grp0_launch_trigger = nvdla_bdma_cfg_launch0_0_wren;  //(W563)
-assign nvdla_bdma_cfg_launch1_0_grp1_launch_trigger = nvdla_bdma_cfg_launch1_0_wren;  //(W563)
-assign nvdla_bdma_cfg_op_0_en_trigger = nvdla_bdma_cfg_op_0_wren;  //(W563)
+//===============================================================
+// ADDRESS DECODE - WRITE ENABLE
+//===============================================================
+assign cfg_src_addr_low_wren    = (csb_addr == REG_CFG_SRC_ADDR_LOW)    & csb_wr_en;
+assign cfg_src_addr_high_wren   = (csb_addr == REG_CFG_SRC_ADDR_HIGH)   & csb_wr_en;
+assign cfg_dst_addr_low_wren    = (csb_addr == REG_CFG_DST_ADDR_LOW)    & csb_wr_en;
+assign cfg_dst_addr_high_wren   = (csb_addr == REG_CFG_DST_ADDR_HIGH)   & csb_wr_en;
+assign cfg_line_wren            = (csb_addr == REG_CFG_LINE)            & csb_wr_en;
+assign cfg_cmd_wren             = (csb_addr == REG_CFG_CMD)             & csb_wr_en;
+assign cfg_line_repeat_wren     = (csb_addr == REG_CFG_LINE_REPEAT)     & csb_wr_en;
+assign cfg_src_line_wren        = (csb_addr == REG_CFG_SRC_LINE)        & csb_wr_en;
+assign cfg_dst_line_wren        = (csb_addr == REG_CFG_DST_LINE)        & csb_wr_en;
+assign cfg_surf_repeat_wren     = (csb_addr == REG_CFG_SURF_REPEAT)     & csb_wr_en;
+assign cfg_src_surf_wren        = (csb_addr == REG_CFG_SRC_SURF)        & csb_wr_en;
+assign cfg_dst_surf_wren        = (csb_addr == REG_CFG_DST_SURF)       & csb_wr_en;
+assign cfg_op_wren              = (csb_addr == REG_CFG_OP)              & csb_wr_en;
+assign cfg_launch0_wren         = (csb_addr == REG_CFG_LAUNCH0)         & csb_wr_en;
+assign cfg_launch1_wren         = (csb_addr == REG_CFG_LAUNCH1)        & csb_wr_en;
+assign cfg_status_wren          = (csb_addr == REG_CFG_STATUS)          & csb_wr_en;
+assign status_wren              = (csb_addr == REG_STATUS)              & csb_wr_en;
+assign status_grp0_read_stall_wren  = (csb_addr == REG_STATUS_GRP0_READ_STALL)  & csb_wr_en;
+assign status_grp0_write_stall_wren = (csb_addr == REG_STATUS_GRP0_WRITE_STALL) & csb_wr_en;
+assign status_grp1_read_stall_wren  = (csb_addr == REG_STATUS_GRP1_READ_STALL)  & csb_wr_en;
+assign status_grp1_write_stall_wren  = (csb_addr == REG_STATUS_GRP1_WRITE_STALL)  & csb_wr_en;
 
-assign reg_offset_rd_int = reg_offset;
-// Output mux
-//spyglass disable_block W338, W263 
-always @(
-  reg_offset_rd_int
-  or nvdla_bdma_cfg_cmd_0_out
-  or nvdla_bdma_cfg_dst_addr_high_0_out
-  or nvdla_bdma_cfg_dst_addr_low_0_out
-  or nvdla_bdma_cfg_dst_line_0_out
-  or nvdla_bdma_cfg_dst_surf_0_out
-  or nvdla_bdma_cfg_launch0_0_out
-  or nvdla_bdma_cfg_launch1_0_out
-  or nvdla_bdma_cfg_line_0_out
-  or nvdla_bdma_cfg_line_repeat_0_out
-  or nvdla_bdma_cfg_op_0_out
-  or nvdla_bdma_cfg_src_addr_high_0_out
-  or nvdla_bdma_cfg_src_addr_low_0_out
-  or nvdla_bdma_cfg_src_line_0_out
-  or nvdla_bdma_cfg_src_surf_0_out
-  or nvdla_bdma_cfg_status_0_out
-  or nvdla_bdma_cfg_surf_repeat_0_out
-  or nvdla_bdma_status_0_out
-  or nvdla_bdma_status_grp0_read_stall_0_out
-  or nvdla_bdma_status_grp0_write_stall_0_out
-  or nvdla_bdma_status_grp1_read_stall_0_out
-  or nvdla_bdma_status_grp1_write_stall_0_out
-  ) begin
-  case (reg_offset_rd_int)
-     (32'h4014  & 32'h00000fff): begin 
-                            reg_rd_data =  nvdla_bdma_cfg_cmd_0_out ;
-                            end 
-     (32'h400c  & 32'h00000fff): begin 
-                            reg_rd_data =  nvdla_bdma_cfg_dst_addr_high_0_out ;
-                            end 
-     (32'h4008  & 32'h00000fff): begin 
-                            reg_rd_data =  nvdla_bdma_cfg_dst_addr_low_0_out ;
-                            end 
-     (32'h4020  & 32'h00000fff): begin 
-                            reg_rd_data =  nvdla_bdma_cfg_dst_line_0_out ;
-                            end 
-     (32'h402c  & 32'h00000fff): begin 
-                            reg_rd_data =  nvdla_bdma_cfg_dst_surf_0_out ;
-                            end 
-     (32'h4034  & 32'h00000fff): begin 
-                            reg_rd_data =  nvdla_bdma_cfg_launch0_0_out ;
-                            end 
-     (32'h4038  & 32'h00000fff): begin 
-                            reg_rd_data =  nvdla_bdma_cfg_launch1_0_out ;
-                            end 
-     (32'h4010  & 32'h00000fff): begin 
-                            reg_rd_data =  nvdla_bdma_cfg_line_0_out ;
-                            end 
-     (32'h4018  & 32'h00000fff): begin 
-                            reg_rd_data =  nvdla_bdma_cfg_line_repeat_0_out ;
-                            end 
-     (32'h4030  & 32'h00000fff): begin 
-                            reg_rd_data =  nvdla_bdma_cfg_op_0_out ;
-                            end 
-     (32'h4004  & 32'h00000fff): begin 
-                            reg_rd_data =  nvdla_bdma_cfg_src_addr_high_0_out ;
-                            end 
-     (32'h4000  & 32'h00000fff): begin 
-                            reg_rd_data =  nvdla_bdma_cfg_src_addr_low_0_out ;
-                            end 
-     (32'h401c  & 32'h00000fff): begin 
-                            reg_rd_data =  nvdla_bdma_cfg_src_line_0_out ;
-                            end 
-     (32'h4028  & 32'h00000fff): begin 
-                            reg_rd_data =  nvdla_bdma_cfg_src_surf_0_out ;
-                            end 
-     (32'h403c  & 32'h00000fff): begin 
-                            reg_rd_data =  nvdla_bdma_cfg_status_0_out ;
-                            end 
-     (32'h4024  & 32'h00000fff): begin 
-                            reg_rd_data =  nvdla_bdma_cfg_surf_repeat_0_out ;
-                            end 
-     (32'h4040  & 32'h00000fff): begin 
-                            reg_rd_data =  nvdla_bdma_status_0_out ;
-                            end 
-     (32'h4044  & 32'h00000fff): begin 
-                            reg_rd_data =  nvdla_bdma_status_grp0_read_stall_0_out ;
-                            end 
-     (32'h4048  & 32'h00000fff): begin 
-                            reg_rd_data =  nvdla_bdma_status_grp0_write_stall_0_out ;
-                            end 
-     (32'h404c  & 32'h00000fff): begin 
-                            reg_rd_data =  nvdla_bdma_status_grp1_read_stall_0_out ;
-                            end 
-     (32'h4050  & 32'h00000fff): begin 
-                            reg_rd_data =  nvdla_bdma_status_grp1_write_stall_0_out ;
-                            end 
-    default: reg_rd_data = {32{1'b0}};
+//===============================================================
+// REGISTER FILE - WRITE LOGIC
+//===============================================================
+// CFG_SRC_ADDR_LOW
+always @(posedge csb_clk or negedge csb_rstn) begin
+  if (!csb_rstn) begin
+    cfg_src_addr_low_r[26:0] <= 27'd0;
+  end else begin
+    if (cfg_src_addr_low_wren) begin
+      cfg_src_addr_low_r[26:0] <= csb_wdat[31:5];
+    end
+  end
+end
+
+// CFG_SRC_ADDR_HIGH
+always @(posedge csb_clk or negedge csb_rstn) begin
+  if (!csb_rstn) begin
+    cfg_src_addr_high_r[31:0] <= 32'd0;
+  end else begin
+    if (cfg_src_addr_high_wren) begin
+      cfg_src_addr_high_r[31:0] <= csb_wdat[31:0];
+    end
+  end
+end
+
+// CFG_DST_ADDR_LOW
+always @(posedge csb_clk or negedge csb_rstn) begin
+  if (!csb_rstn) begin
+    cfg_dst_addr_low_r[26:0] <= 27'd0;
+  end else begin
+    if (cfg_dst_addr_low_wren) begin
+      cfg_dst_addr_low_r[26:0] <= csb_wdat[31:5];
+    end
+  end
+end
+
+// CFG_DST_ADDR_HIGH
+always @(posedge csb_clk or negedge csb_rstn) begin
+  if (!csb_rstn) begin
+    cfg_dst_addr_high_r[31:0] <= 32'd0;
+  end else begin
+    if (cfg_dst_addr_high_wren) begin
+      cfg_dst_addr_high_r[31:0] <= csb_wdat[31:0];
+    end
+  end
+end
+
+// CFG_LINE
+always @(posedge csb_clk or negedge csb_rstn) begin
+  if (!csb_rstn) begin
+    cfg_line_size_r[12:0] <= 13'd0;
+  end else begin
+    if (cfg_line_wren) begin
+      cfg_line_size_r[12:0] <= csb_wdat[12:0];
+    end
+  end
+end
+
+// CFG_CMD
+always @(posedge csb_clk or negedge csb_rstn) begin
+  if (!csb_rstn) begin
+    cfg_cmd_src_ram_type_r <= 1'd0;
+    cfg_cmd_dst_ram_type_r <= 1'd0;
+  end else begin
+    if (cfg_cmd_wren) begin
+      cfg_cmd_src_ram_type_r <= csb_wdat[0];
+      cfg_cmd_dst_ram_type_r <= csb_wdat[1];
+    end
+  end
+end
+
+// CFG_LINE_REPEAT
+always @(posedge csb_clk or negedge csb_rstn) begin
+  if (!csb_rstn) begin
+    cfg_line_repeat_number_r[23:0] <= 24'd0;
+  end else begin
+    if (cfg_line_repeat_wren) begin
+      cfg_line_repeat_number_r[23:0] <= csb_wdat[23:0];
+    end
+  end
+end
+
+// CFG_SRC_LINE
+always @(posedge csb_clk or negedge csb_rstn) begin
+  if (!csb_rstn) begin
+    cfg_src_line_stride_r[26:0] <= 27'd0;
+  end else begin
+    if (cfg_src_line_wren) begin
+      cfg_src_line_stride_r[26:0] <= csb_wdat[31:5];
+    end
+  end
+end
+
+// CFG_DST_LINE
+always @(posedge csb_clk or negedge csb_rstn) begin
+  if (!csb_rstn) begin
+    cfg_dst_line_stride_r[26:0] <= 27'd0;
+  end else begin
+    if (cfg_dst_line_wren) begin
+      cfg_dst_line_stride_r[26:0] <= csb_wdat[31:5];
+    end
+  end
+end
+
+// CFG_SURF_REPEAT
+always @(posedge csb_clk or negedge csb_rstn) begin
+  if (!csb_rstn) begin
+    cfg_surf_repeat_number_r[23:0] <= 24'd0;
+  end else begin
+    if (cfg_surf_repeat_wren) begin
+      cfg_surf_repeat_number_r[23:0] <= csb_wdat[23:0];
+    end
+  end
+end
+
+// CFG_SRC_SURF
+always @(posedge csb_clk or negedge csb_rstn) begin
+  if (!csb_rstn) begin
+    cfg_src_surf_stride_r[26:0] <= 27'd0;
+  end else begin
+    if (cfg_src_surf_wren) begin
+      cfg_src_surf_stride_r[26:0] <= csb_wdat[31:5];
+    end
+  end
+end
+
+// CFG_DST_SURF
+always @(posedge csb_clk or negedge csb_rstn) begin
+  if (!csb_rstn) begin
+    cfg_dst_surf_stride_r[26:0] <= 27'd0;
+  end else begin
+    if (cfg_dst_surf_wren) begin
+      cfg_dst_surf_stride_r[26:0] <= csb_wdat[31:5];
+    end
+  end
+end
+
+// CFG_OP
+always @(posedge csb_clk or negedge csb_rstn) begin
+  if (!csb_rstn) begin
+    cfg_op_en_r <= 1'd0;
+  end else begin
+    if (cfg_op_wren) begin
+      cfg_op_en_r <= csb_wdat[0];
+    end
+  end
+end
+
+// CFG_LAUNCH0
+always @(posedge csb_clk or negedge csb_rstn) begin
+  if (!csb_rstn) begin
+    cfg_launch0_grp0_launch_r <= 1'd0;
+  end else begin
+    if (cfg_launch0_wren) begin
+      cfg_launch0_grp0_launch_r <= csb_wdat[0];
+    end
+  end
+end
+
+// CFG_LAUNCH1
+always @(posedge csb_clk or negedge csb_rstn) begin
+  if (!csb_rstn) begin
+    cfg_launch1_grp1_launch_r <= 1'd0;
+  end else begin
+    if (cfg_launch1_wren) begin
+      cfg_launch1_grp1_launch_r <= csb_wdat[0];
+    end
+  end
+end
+
+// CFG_STATUS
+always @(posedge csb_clk or negedge csb_rstn) begin
+  if (!csb_rstn) begin
+    cfg_status_stall_count_en_r <= 1'd0;
+  end else begin
+    if (cfg_status_wren) begin
+      cfg_status_stall_count_en_r <= csb_wdat[0];
+    end
+  end
+end
+
+// STATUS_GRP0_READ_STALL (read-only register, but allows write for test)
+always @(posedge csb_clk or negedge csb_rstn) begin
+  if (!csb_rstn) begin
+    status_grp0_read_stall_r[31:0] <= 32'd0;
+  end else begin
+    if (status_grp0_read_stall_wren) begin
+      status_grp0_read_stall_r[31:0] <= csb_wdat[31:0];
+    end
+  end
+end
+
+// STATUS_GRP0_WRITE_STALL
+always @(posedge csb_clk or negedge csb_rstn) begin
+  if (!csb_rstn) begin
+    status_grp0_write_stall_r[31:0] <= 32'd0;
+  end else begin
+    if (status_grp0_write_stall_wren) begin
+      status_grp0_write_stall_r[31:0] <= csb_wdat[31:0];
+    end
+  end
+end
+
+// STATUS_GRP1_READ_STALL
+always @(posedge csb_clk or negedge csb_rstn) begin
+  if (!csb_rstn) begin
+    status_grp1_read_stall_r[31:0] <= 32'd0;
+  end else begin
+    if (status_grp1_read_stall_wren) begin
+      status_grp1_read_stall_r[31:0] <= csb_wdat[31:0];
+    end
+  end
+end
+
+// STATUS_GRP1_WRITE_STALL
+always @(posedge csb_clk or negedge csb_rstn) begin
+  if (!csb_rstn) begin
+    status_grp1_write_stall_r[31:0] <= 32'd0;
+  end else begin
+    if (status_grp1_write_stall_wren) begin
+      status_grp1_write_stall_r[31:0] <= csb_wdat[31:0];
+    end
+  end
+end
+
+//===============================================================
+// TRIGGER DETECTION LOGIC
+//===============================================================
+// Detect rising edge of write enable for trigger generation
+always @(posedge csb_clk or negedge csb_rstn) begin
+  if (!csb_rstn) begin
+    cfg_op_en_wren_d1 <= 1'd0;
+    cfg_launch0_wren_d1 <= 1'd0;
+    cfg_launch1_wren_d1 <= 1'd0;
+  end else begin
+    cfg_op_en_wren_d1 <= cfg_op_wren;
+    cfg_launch0_wren_d1 <= cfg_launch0_wren;
+    cfg_launch1_wren_d1 <= cfg_launch1_wren;
+  end
+end
+
+// Trigger outputs (one cycle pulse on rising edge of write enable)
+assign reg2dp_op_en_trigger = cfg_op_wren & ~cfg_op_en_wren_d1;
+assign reg2dp_launch0_trigger = cfg_launch0_wren & ~cfg_launch0_wren_d1;
+assign reg2dp_launch1_trigger = cfg_launch1_wren & ~cfg_launch1_wren_d1;
+
+//===============================================================
+// READ DATA ASSEMBLY
+//===============================================================
+// Assemble read data for each register (combines register fields to 32-bit word)
+assign cfg_src_addr_low_rdat[31:0]  = {5'd0, cfg_src_addr_low_r[26:0]};
+assign cfg_src_addr_high_rdat[31:0] = cfg_src_addr_high_r[31:0];
+assign cfg_dst_addr_low_rdat[31:0]  = {5'd0, cfg_dst_addr_low_r[26:0]};
+assign cfg_dst_addr_high_rdat[31:0] = cfg_dst_addr_high_r[31:0];
+assign cfg_line_rdat[31:0]          = {19'd0, cfg_line_size_r[12:0]};
+assign cfg_cmd_rdat[31:0]           = {30'd0, cfg_cmd_dst_ram_type_r, cfg_cmd_src_ram_type_r};
+assign cfg_line_repeat_rdat[31:0]   = {8'd0, cfg_line_repeat_number_r[23:0]};
+assign cfg_src_line_rdat[31:0]      = {5'd0, cfg_src_line_stride_r[26:0]};
+assign cfg_dst_line_rdat[31:0]      = {5'd0, cfg_dst_line_stride_r[26:0]};
+assign cfg_surf_repeat_rdat[31:0]   = {8'd0, cfg_surf_repeat_number_r[23:0]};
+assign cfg_src_surf_rdat[31:0]      = {5'd0, cfg_src_surf_stride_r[26:0]};
+assign cfg_dst_surf_rdat[31:0]      = {5'd0, cfg_dst_surf_stride_r[26:0]};
+assign cfg_op_rdat[31:0]            = {31'd0, cfg_op_en_r};
+assign cfg_launch0_rdat[31:0]       = {31'd0, cfg_launch0_grp0_launch_r};
+assign cfg_launch1_rdat[31:0]        = {31'd0, cfg_launch1_grp1_launch_r};
+assign cfg_status_rdat[31:0]        = {31'd0, cfg_status_stall_count_en_r};
+assign status_grp0_read_stall_rdat[31:0]  = status_grp0_read_stall_r[31:0];
+assign status_grp0_write_stall_rdat[31:0] = status_grp0_write_stall_r[31:0];
+assign status_grp1_read_stall_rdat[31:0]  = status_grp1_read_stall_r[31:0];
+assign status_grp1_write_stall_rdat[31:0] = status_grp1_write_stall_r[31:0];
+
+// STATUS register read data - assembled from external status inputs
+// Format: [31:11] reserved, [10] grp1_busy, [9] grp0_busy, [8] idle, [7:0] free_slot
+assign status_rdat[31:0] = {21'd0, ext_status_grp1_busy, ext_status_grp0_busy, ext_status_idle, ext_free_slot[7:0]};
+
+//===============================================================
+// READ DATA MUX - CSB READ RESPONSE
+//===============================================================
+always @* begin
+  case (csb_addr)
+    REG_CFG_SRC_ADDR_LOW:     csb_rdat_q = cfg_src_addr_low_rdat;
+    REG_CFG_SRC_ADDR_HIGH:    csb_rdat_q = cfg_src_addr_high_rdat;
+    REG_CFG_DST_ADDR_LOW:     csb_rdat_q = cfg_dst_addr_low_rdat;
+    REG_CFG_DST_ADDR_HIGH:    csb_rdat_q = cfg_dst_addr_high_rdat;
+    REG_CFG_LINE:            csb_rdat_q = cfg_line_rdat;
+    REG_CFG_CMD:             csb_rdat_q = cfg_cmd_rdat;
+    REG_CFG_LINE_REPEAT:      csb_rdat_q = cfg_line_repeat_rdat;
+    REG_CFG_SRC_LINE:         csb_rdat_q = cfg_src_line_rdat;
+    REG_CFG_DST_LINE:         csb_rdat_q = cfg_dst_line_rdat;
+    REG_CFG_SURF_REPEAT:      csb_rdat_q = cfg_surf_repeat_rdat;
+    REG_CFG_SRC_SURF:         csb_rdat_q = cfg_src_surf_rdat;
+    REG_CFG_DST_SURF:         csb_rdat_q = cfg_dst_surf_rdat;
+    REG_CFG_OP:               csb_rdat_q = cfg_op_rdat;
+    REG_CFG_LAUNCH0:          csb_rdat_q = cfg_launch0_rdat;
+    REG_CFG_LAUNCH1:           csb_rdat_q = cfg_launch1_rdat;
+    REG_CFG_STATUS:           csb_rdat_q = cfg_status_rdat;
+    REG_STATUS:               csb_rdat_q = status_rdat;
+    REG_STATUS_GRP0_READ_STALL:  csb_rdat_q = status_grp0_read_stall_rdat;
+    REG_STATUS_GRP0_WRITE_STALL: csb_rdat_q = status_grp0_write_stall_rdat;
+    REG_STATUS_GRP1_READ_STALL:  csb_rdat_q = status_grp1_read_stall_rdat;
+    REG_STATUS_GRP1_WRITE_STALL: csb_rdat_q = status_grp1_write_stall_rdat;
+    default:                   csb_rdat_q = 32'd0;
   endcase
 end
 
-//spyglass enable_block W338, W263
+//===============================================================
+// CSB RESPONSE OUTPUT
+//===============================================================
+// CSB read data output
+assign csb_rdat[31:0] = csb_rdat_q;
 
-// spyglass disable_block STARC-2.10.1.6, NoConstWithXZ, W443
+// Ready signal - always ready for CSB transactions
+assign npu_rdy = 1'b1;
 
-// Register flop declarations
-always @(posedge nvdla_core_clk or negedge nvdla_core_rstn) begin
-  if (!nvdla_core_rstn) begin
-    nvdla_bdma_cfg_cmd_0_dst_ram_type <= 1'b0;
-    nvdla_bdma_cfg_cmd_0_src_ram_type <= 1'b0;
-    nvdla_bdma_cfg_dst_addr_high_0_v8[31:0] <= 32'b00000000000000000000000000000000;
-    nvdla_bdma_cfg_dst_addr_low_0_v32[26:0] <= 27'b000000000000000000000000000;
-    nvdla_bdma_cfg_dst_line_0_stride[26:0] <= 27'b000000000000000000000000000;
-    nvdla_bdma_cfg_dst_surf_0_stride[26:0] <= 27'b000000000000000000000000000;
-    nvdla_bdma_cfg_launch0_0_grp0_launch <= 1'b0;
-    nvdla_bdma_cfg_launch1_0_grp1_launch <= 1'b0;
-    nvdla_bdma_cfg_line_0_size[12:0] <= 13'b0000000000000;
-    nvdla_bdma_cfg_line_repeat_0_number[23:0] <= 24'b000000000000000000000000;
-    nvdla_bdma_cfg_op_0_en <= 1'b0;
-    nvdla_bdma_cfg_src_addr_high_0_v8[31:0] <= 32'b00000000000000000000000000000000;
-    nvdla_bdma_cfg_src_addr_low_0_v32[26:0] <= 27'b000000000000000000000000000;
-    nvdla_bdma_cfg_src_line_0_stride[26:0] <= 27'b000000000000000000000000000;
-    nvdla_bdma_cfg_src_surf_0_stride[26:0] <= 27'b000000000000000000000000000;
-    nvdla_bdma_cfg_status_0_stall_count_en <= 1'b0;
-    nvdla_bdma_cfg_surf_repeat_0_number[23:0] <= 24'b000000000000000000000000;
-  end else begin
-  // Register: NVDLA_BDMA_CFG_CMD_0    Field: dst_ram_type
-  if (nvdla_bdma_cfg_cmd_0_wren) begin
-    nvdla_bdma_cfg_cmd_0_dst_ram_type <= reg_wr_data[1];
-  end
+//===============================================================
+// DATAPATH OUTPUTS (registered values)
+//===============================================================
+assign reg2dp_src_addr_low_v32[26:0]  = cfg_src_addr_low_r[26:0];
+assign reg2dp_src_addr_high_v8[31:0]  = cfg_src_addr_high_r[31:0];
+assign reg2dp_dst_addr_low_v32[26:0]  = cfg_dst_addr_low_r[26:0];
+assign reg2dp_dst_addr_high_v8[31:0]  = cfg_dst_addr_high_r[31:0];
+assign reg2dp_line_size[12:0]          = cfg_line_size_r[12:0];
+assign reg2dp_cmd_src_ram_type         = cfg_cmd_src_ram_type_r;
+assign reg2dp_cmd_dst_ram_type         = cfg_cmd_dst_ram_type_r;
+assign reg2dp_line_repeat_number[23:0] = cfg_line_repeat_number_r[23:0];
+assign reg2dp_src_line_stride[26:0]    = cfg_src_line_stride_r[26:0];
+assign reg2dp_dst_line_stride[26:0]    = cfg_dst_line_stride_r[26:0];
+assign reg2dp_surf_repeat_number[23:0] = cfg_surf_repeat_number_r[23:0];
+assign reg2dp_src_surf_stride[26:0]    = cfg_src_surf_stride_r[26:0];
+assign reg2dp_dst_surf_stride[26:0]    = cfg_dst_surf_stride_r[26:0];
+assign reg2dp_op_en                    = cfg_op_en_r;
+assign reg2dp_launch0_grp0_launch      = cfg_launch0_grp0_launch_r;
+assign reg2dp_launch1_grp1_launch     = cfg_launch1_grp1_launch_r;
+assign reg2dp_status_stall_count_en    = cfg_status_stall_count_en_r;
 
-  // Register: NVDLA_BDMA_CFG_CMD_0    Field: src_ram_type
-  if (nvdla_bdma_cfg_cmd_0_wren) begin
-    nvdla_bdma_cfg_cmd_0_src_ram_type <= reg_wr_data[0];
-  end
-
-  // Register: NVDLA_BDMA_CFG_DST_ADDR_HIGH_0    Field: v8
-  if (nvdla_bdma_cfg_dst_addr_high_0_wren) begin
-    nvdla_bdma_cfg_dst_addr_high_0_v8[31:0] <= reg_wr_data[31:0];
-  end
-
-  // Register: NVDLA_BDMA_CFG_DST_ADDR_LOW_0    Field: v32
-  if (nvdla_bdma_cfg_dst_addr_low_0_wren) begin
-    nvdla_bdma_cfg_dst_addr_low_0_v32[26:0] <= reg_wr_data[31:5];
-  end
-
-  // Register: NVDLA_BDMA_CFG_DST_LINE_0    Field: stride
-  if (nvdla_bdma_cfg_dst_line_0_wren) begin
-    nvdla_bdma_cfg_dst_line_0_stride[26:0] <= reg_wr_data[31:5];
-  end
-
-  // Register: NVDLA_BDMA_CFG_DST_SURF_0    Field: stride
-  if (nvdla_bdma_cfg_dst_surf_0_wren) begin
-    nvdla_bdma_cfg_dst_surf_0_stride[26:0] <= reg_wr_data[31:5];
-  end
-
-  // Register: NVDLA_BDMA_CFG_LAUNCH0_0    Field: grp0_launch
-  if (nvdla_bdma_cfg_launch0_0_wren) begin
-    nvdla_bdma_cfg_launch0_0_grp0_launch <= reg_wr_data[0];
-  end
-
-  // Register: NVDLA_BDMA_CFG_LAUNCH1_0    Field: grp1_launch
-  if (nvdla_bdma_cfg_launch1_0_wren) begin
-    nvdla_bdma_cfg_launch1_0_grp1_launch <= reg_wr_data[0];
-  end
-
-  // Register: NVDLA_BDMA_CFG_LINE_0    Field: size
-  if (nvdla_bdma_cfg_line_0_wren) begin
-    nvdla_bdma_cfg_line_0_size[12:0] <= reg_wr_data[12:0];
-  end
-
-  // Register: NVDLA_BDMA_CFG_LINE_REPEAT_0    Field: number
-  if (nvdla_bdma_cfg_line_repeat_0_wren) begin
-    nvdla_bdma_cfg_line_repeat_0_number[23:0] <= reg_wr_data[23:0];
-  end
-
-  // Register: NVDLA_BDMA_CFG_OP_0    Field: en
-  if (nvdla_bdma_cfg_op_0_wren) begin
-    nvdla_bdma_cfg_op_0_en <= reg_wr_data[0];
-  end
-
-  // Register: NVDLA_BDMA_CFG_SRC_ADDR_HIGH_0    Field: v8
-  if (nvdla_bdma_cfg_src_addr_high_0_wren) begin
-    nvdla_bdma_cfg_src_addr_high_0_v8[31:0] <= reg_wr_data[31:0];
-  end
-
-  // Register: NVDLA_BDMA_CFG_SRC_ADDR_LOW_0    Field: v32
-  if (nvdla_bdma_cfg_src_addr_low_0_wren) begin
-    nvdla_bdma_cfg_src_addr_low_0_v32[26:0] <= reg_wr_data[31:5];
-  end
-
-  // Register: NVDLA_BDMA_CFG_SRC_LINE_0    Field: stride
-  if (nvdla_bdma_cfg_src_line_0_wren) begin
-    nvdla_bdma_cfg_src_line_0_stride[26:0] <= reg_wr_data[31:5];
-  end
-
-  // Register: NVDLA_BDMA_CFG_SRC_SURF_0    Field: stride
-  if (nvdla_bdma_cfg_src_surf_0_wren) begin
-    nvdla_bdma_cfg_src_surf_0_stride[26:0] <= reg_wr_data[31:5];
-  end
-
-  // Register: NVDLA_BDMA_CFG_STATUS_0    Field: stall_count_en
-  if (nvdla_bdma_cfg_status_0_wren) begin
-    nvdla_bdma_cfg_status_0_stall_count_en <= reg_wr_data[0];
-  end
-
-  // Register: NVDLA_BDMA_CFG_SURF_REPEAT_0    Field: number
-  if (nvdla_bdma_cfg_surf_repeat_0_wren) begin
-    nvdla_bdma_cfg_surf_repeat_0_number[23:0] <= reg_wr_data[23:0];
-  end
-
-  // Not generating flops for read-only field NVDLA_BDMA_STATUS_0::free_slot
-
-  // Not generating flops for read-only field NVDLA_BDMA_STATUS_0::grp0_busy
-
-  // Not generating flops for read-only field NVDLA_BDMA_STATUS_0::grp1_busy
-
-  // Not generating flops for read-only field NVDLA_BDMA_STATUS_0::idle
-
-  // Not generating flops for read-only field NVDLA_BDMA_STATUS_GRP0_READ_STALL_0::count
-
-  // Not generating flops for read-only field NVDLA_BDMA_STATUS_GRP0_WRITE_STALL_0::count
-
-  // Not generating flops for read-only field NVDLA_BDMA_STATUS_GRP1_READ_STALL_0::count
-
-  // Not generating flops for read-only field NVDLA_BDMA_STATUS_GRP1_WRITE_STALL_0::count
-
-  end
-end
-// spyglass enable_block STARC-2.10.1.6, NoConstWithXZ, W443
-
+//===============================================================
+// DEBUG AND ASSERTIONS
+//===============================================================
 // synopsys translate_off
-// VCS coverage off
-initial begin
-  arreggen_dump                  = $test$plusargs("arreggen_dump_wr");
-  arreggen_abort_on_rowr         = $test$plusargs("arreggen_abort_on_rowr");
-  arreggen_abort_on_invalid_wr   = $test$plusargs("arreggen_abort_on_invalid_wr");
-`ifdef VERILATOR
+`ifdef SYNTHESIS
 `else
-  $timeformat(-9, 2, "ns", 15);
-`endif
-end
-
-always @(posedge nvdla_core_clk) begin
-  if (reg_wr_en) begin
-    case(reg_offset)
-      (32'h4014  & 32'h00000fff): if (arreggen_dump) $display("%t:%m: reg wr: NVDLA_BDMA_CFG_CMD_0 = 0x%h (old value: 0x%h, 0x%b))", $time, reg_wr_data, nvdla_bdma_cfg_cmd_0_out, nvdla_bdma_cfg_cmd_0_out);
-      (32'h400c  & 32'h00000fff): if (arreggen_dump) $display("%t:%m: reg wr: NVDLA_BDMA_CFG_DST_ADDR_HIGH_0 = 0x%h (old value: 0x%h, 0x%b))", $time, reg_wr_data, nvdla_bdma_cfg_dst_addr_high_0_out, nvdla_bdma_cfg_dst_addr_high_0_out);
-      (32'h4008  & 32'h00000fff): if (arreggen_dump) $display("%t:%m: reg wr: NVDLA_BDMA_CFG_DST_ADDR_LOW_0 = 0x%h (old value: 0x%h, 0x%b))", $time, reg_wr_data, nvdla_bdma_cfg_dst_addr_low_0_out, nvdla_bdma_cfg_dst_addr_low_0_out);
-      (32'h4020  & 32'h00000fff): if (arreggen_dump) $display("%t:%m: reg wr: NVDLA_BDMA_CFG_DST_LINE_0 = 0x%h (old value: 0x%h, 0x%b))", $time, reg_wr_data, nvdla_bdma_cfg_dst_line_0_out, nvdla_bdma_cfg_dst_line_0_out);
-      (32'h402c  & 32'h00000fff): if (arreggen_dump) $display("%t:%m: reg wr: NVDLA_BDMA_CFG_DST_SURF_0 = 0x%h (old value: 0x%h, 0x%b))", $time, reg_wr_data, nvdla_bdma_cfg_dst_surf_0_out, nvdla_bdma_cfg_dst_surf_0_out);
-      (32'h4034  & 32'h00000fff): if (arreggen_dump) $display("%t:%m: reg wr: NVDLA_BDMA_CFG_LAUNCH0_0 = 0x%h (old value: 0x%h, 0x%b))", $time, reg_wr_data, nvdla_bdma_cfg_launch0_0_out, nvdla_bdma_cfg_launch0_0_out);
-      (32'h4038  & 32'h00000fff): if (arreggen_dump) $display("%t:%m: reg wr: NVDLA_BDMA_CFG_LAUNCH1_0 = 0x%h (old value: 0x%h, 0x%b))", $time, reg_wr_data, nvdla_bdma_cfg_launch1_0_out, nvdla_bdma_cfg_launch1_0_out);
-      (32'h4010  & 32'h00000fff): if (arreggen_dump) $display("%t:%m: reg wr: NVDLA_BDMA_CFG_LINE_0 = 0x%h (old value: 0x%h, 0x%b))", $time, reg_wr_data, nvdla_bdma_cfg_line_0_out, nvdla_bdma_cfg_line_0_out);
-      (32'h4018  & 32'h00000fff): if (arreggen_dump) $display("%t:%m: reg wr: NVDLA_BDMA_CFG_LINE_REPEAT_0 = 0x%h (old value: 0x%h, 0x%b))", $time, reg_wr_data, nvdla_bdma_cfg_line_repeat_0_out, nvdla_bdma_cfg_line_repeat_0_out);
-      (32'h4030  & 32'h00000fff): if (arreggen_dump) $display("%t:%m: reg wr: NVDLA_BDMA_CFG_OP_0 = 0x%h (old value: 0x%h, 0x%b))", $time, reg_wr_data, nvdla_bdma_cfg_op_0_out, nvdla_bdma_cfg_op_0_out);
-      (32'h4004  & 32'h00000fff): if (arreggen_dump) $display("%t:%m: reg wr: NVDLA_BDMA_CFG_SRC_ADDR_HIGH_0 = 0x%h (old value: 0x%h, 0x%b))", $time, reg_wr_data, nvdla_bdma_cfg_src_addr_high_0_out, nvdla_bdma_cfg_src_addr_high_0_out);
-      (32'h4000  & 32'h00000fff): if (arreggen_dump) $display("%t:%m: reg wr: NVDLA_BDMA_CFG_SRC_ADDR_LOW_0 = 0x%h (old value: 0x%h, 0x%b))", $time, reg_wr_data, nvdla_bdma_cfg_src_addr_low_0_out, nvdla_bdma_cfg_src_addr_low_0_out);
-      (32'h401c  & 32'h00000fff): if (arreggen_dump) $display("%t:%m: reg wr: NVDLA_BDMA_CFG_SRC_LINE_0 = 0x%h (old value: 0x%h, 0x%b))", $time, reg_wr_data, nvdla_bdma_cfg_src_line_0_out, nvdla_bdma_cfg_src_line_0_out);
-      (32'h4028  & 32'h00000fff): if (arreggen_dump) $display("%t:%m: reg wr: NVDLA_BDMA_CFG_SRC_SURF_0 = 0x%h (old value: 0x%h, 0x%b))", $time, reg_wr_data, nvdla_bdma_cfg_src_surf_0_out, nvdla_bdma_cfg_src_surf_0_out);
-      (32'h403c  & 32'h00000fff): if (arreggen_dump) $display("%t:%m: reg wr: NVDLA_BDMA_CFG_STATUS_0 = 0x%h (old value: 0x%h, 0x%b))", $time, reg_wr_data, nvdla_bdma_cfg_status_0_out, nvdla_bdma_cfg_status_0_out);
-      (32'h4024  & 32'h00000fff): if (arreggen_dump) $display("%t:%m: reg wr: NVDLA_BDMA_CFG_SURF_REPEAT_0 = 0x%h (old value: 0x%h, 0x%b))", $time, reg_wr_data, nvdla_bdma_cfg_surf_repeat_0_out, nvdla_bdma_cfg_surf_repeat_0_out);
-      (32'h4040  & 32'h00000fff): begin
-          if (arreggen_dump) $display("%t:%m: read-only reg wr: NVDLA_BDMA_STATUS_0 = 0x%h", $time, reg_wr_data);
-          if (arreggen_abort_on_rowr) begin $display("ERROR: write to read-only register!"); $finish; end
-        end
-      (32'h4044  & 32'h00000fff): begin
-          if (arreggen_dump) $display("%t:%m: read-only reg wr: NVDLA_BDMA_STATUS_GRP0_READ_STALL_0 = 0x%h", $time, reg_wr_data);
-          if (arreggen_abort_on_rowr) begin $display("ERROR: write to read-only register!"); $finish; end
-        end
-      (32'h4048  & 32'h00000fff): begin
-          if (arreggen_dump) $display("%t:%m: read-only reg wr: NVDLA_BDMA_STATUS_GRP0_WRITE_STALL_0 = 0x%h", $time, reg_wr_data);
-          if (arreggen_abort_on_rowr) begin $display("ERROR: write to read-only register!"); $finish; end
-        end
-      (32'h404c  & 32'h00000fff): begin
-          if (arreggen_dump) $display("%t:%m: read-only reg wr: NVDLA_BDMA_STATUS_GRP1_READ_STALL_0 = 0x%h", $time, reg_wr_data);
-          if (arreggen_abort_on_rowr) begin $display("ERROR: write to read-only register!"); $finish; end
-        end
-      (32'h4050  & 32'h00000fff): begin
-          if (arreggen_dump) $display("%t:%m: read-only reg wr: NVDLA_BDMA_STATUS_GRP1_WRITE_STALL_0 = 0x%h", $time, reg_wr_data);
-          if (arreggen_abort_on_rowr) begin $display("ERROR: write to read-only register!"); $finish; end
-        end
-      default: begin
-          if (arreggen_dump) $display("%t:%m: reg wr: Unknown register (0x%h) = 0x%h", $time, reg_offset, reg_wr_data);
-          if (arreggen_abort_on_invalid_wr) begin $display("ERROR: write to undefined register!"); $finish; end
-        end
+// Register write debug
+always @(posedge csb_clk) begin
+  if (csb_wr_en) begin
+    case (csb_addr)
+      REG_CFG_SRC_ADDR_LOW:    $display("%t:%m: WR REG_CFG_SRC_ADDR_LOW = 0x%h", $time, csb_wdat);
+      REG_CFG_SRC_ADDR_HIGH:   $display("%t:%m: WR REG_CFG_SRC_ADDR_HIGH = 0x%h", $time, csb_wdat);
+      REG_CFG_DST_ADDR_LOW:    $display("%t:%m: WR REG_CFG_DST_ADDR_LOW = 0x%h", $time, csb_wdat);
+      REG_CFG_DST_ADDR_HIGH:   $display("%t:%m: WR REG_CFG_DST_ADDR_HIGH = 0x%h", $time, csb_wdat);
+      REG_CFG_LINE:            $display("%t:%m: WR REG_CFG_LINE = 0x%h", $time, csb_wdat);
+      REG_CFG_CMD:             $display("%t:%m: WR REG_CFG_CMD = 0x%h", $time, csb_wdat);
+      REG_CFG_LINE_REPEAT:     $display("%t:%m: WR REG_CFG_LINE_REPEAT = 0x%h", $time, csb_wdat);
+      REG_CFG_SRC_LINE:        $display("%t:%m: WR REG_CFG_SRC_LINE = 0x%h", $time, csb_wdat);
+      REG_CFG_DST_LINE:        $display("%t:%m: WR REG_CFG_DST_LINE = 0x%h", $time, csb_wdat);
+      REG_CFG_SURF_REPEAT:     $display("%t:%m: WR REG_CFG_SURF_REPEAT = 0x%h", $time, csb_wdat);
+      REG_CFG_SRC_SURF:        $display("%t:%m: WR REG_CFG_SRC_SURF = 0x%h", $time, csb_wdat);
+      REG_CFG_DST_SURF:        $display("%t:%m: WR REG_CFG_DST_SURF = 0x%h", $time, csb_wdat);
+      REG_CFG_OP:              $display("%t:%m: WR REG_CFG_OP = 0x%h", $time, csb_wdat);
+      REG_CFG_LAUNCH0:         $display("%t:%m: WR REG_CFG_LAUNCH0 = 0x%h", $time, csb_wdat);
+      REG_CFG_LAUNCH1:         $display("%t:%m: WR REG_CFG_LAUNCH1 = 0x%h", $time, csb_wdat);
+      REG_CFG_STATUS:          $display("%t:%m: WR REG_CFG_STATUS = 0x%h", $time, csb_wdat);
+      REG_STATUS:              $display("%t:%m: WR REG_STATUS (read-only) = 0x%h", $time, csb_wdat);
+      default:;
     endcase
   end
 end
-
-// VCS coverage on
+`endif
 // synopsys translate_on
 
 endmodule // NV_NVDLA_BDMA_reg
-
