@@ -312,7 +312,7 @@ module fp17_mul (
     wire lsb_bit;
     wire round_up;
 
-    assign mant_to_round = s2_product_mant_q[K_P_MANT_WIDTH-2:K_MANT_WIDTH-1];  // bits [20:10]
+    assign mant_to_round = s2_product_mant_q[K_P_MANT_WIDTH-2 -: MANT_WIDTH+1];  // bits [20:10]
     assign guard_bit = s2_product_mant_q[MANT_WIDTH-1];  // bit 9
     assign round_bit = s2_product_mant_q[MANT_WIDTH-2];  // bit 8
     assign sticky_bit = |s2_product_mant_q[MANT_WIDTH-3:0];  // bits [7:0]

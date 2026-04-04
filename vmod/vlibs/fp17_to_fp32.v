@@ -113,7 +113,7 @@ wire is_subnormal = (fp17_expo == {I_EXPO_WIDTH{1'b0}}) && (fp17_mant != {I_MANT
 // For normal values: new_expo = old_expo + BIAS_DIFF
 // For subnormal: handled separately below
 wire [O_EXPO_WIDTH-1:0] expo_normal;
-assign expo_normal = fp17_expo[O_EXPO_WIDTH-1:0] + O_EXPO_WIDTH'(BIAS_DIFF);
+assign expo_normal = fp17_expo[O_EXPO_WIDTH-1:0] + BIAS_DIFF[O_EXPO_WIDTH-1:0];
 
 // For subnormal fp17, we need to shift the mantissa right to normalize
 // The effective exponent becomes 1 - I_BIAS (leading 0 before mantissa)
@@ -139,7 +139,7 @@ assign clz_count = (fp17_mant[9:8] == 2'b00) ? 4'd2 :
 // Effective exponent after normalization: 1 - I_BIAS - clz_count + BIAS_DIFF
 // = 1 - 31 - clz_count + 96 = 66 - clz_count
 wire [O_EXPO_WIDTH-1:0] expo_subnormal_calc;
-assign expo_subnormal_calc = O_EXPO_WIDTH'(66) - O_EXPO_WIDTH'(clz_count);
+assign expo_subnormal_calc = 8'd66 - {4'b0, clz_count};
 
 // Shift subnormal mantissa left by clz_count positions
 // The implicit 1. is not present in subnormal, so we shift until leading 1 appears

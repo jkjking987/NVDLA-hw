@@ -100,7 +100,7 @@ module fp17_to_fp16 (
     assign o_expo_normal = o_expo_converted[O_EXPO_WIDTH-1:0];
 
     // Final exponent selection
-    wire [O_EXPO_WIDTH-1:0]                  expo_selected;
+    reg [O_EXPO_WIDTH-1:0]                   expo_selected;
     always @* begin
         if (i_is_zero || i_is_denorm || expo_underflow) begin
             expo_selected = {O_EXPO_WIDTH{1'b0}};
@@ -120,7 +120,7 @@ module fp17_to_fp16 (
     // Denorm shift: (1 - unbiased_exp) bits
     wire [I_MANT_WIDTH:0]                    i_mant_ext;  // extra bit for overflow
     wire [O_MANT_WIDTH:0]                    o_mant_shifted;
-    wire [O_MANT_WIDTH-1:0]                  o_mant_final;
+    reg [O_MANT_WIDTH-1:0]                  o_mant_final;
 
     assign i_mant_ext = {1'b1, i_mant};  // add implicit 1 for normalized, or leading 0 for denorm
 

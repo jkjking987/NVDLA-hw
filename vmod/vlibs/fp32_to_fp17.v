@@ -113,7 +113,7 @@ assign fp32_is_subnorm = (fp32_expo == {I_EXPO_WIDTH{1'b0}}) && (fp32_mant != {I
 // For normal values: expo_out = fp32_expo - BIAS_DIFF
 // For subnormal fp32: treat as if exponent = 1, then subtract BIAS_DIFF
 wire [I_EXPO_WIDTH-1:0] fp32_expo_eff;
-assign fp32_expo_eff = fp32_is_subnorm ? I_EXPO_WIDTH'(1) : fp32_expo;
+assign fp32_expo_eff = fp32_is_subnorm ? 8'b1 : fp32_expo;
 
 // Converted exponent (may be negative or exceed output range)
 assign expo_converted = $signed({1'b0, fp32_expo_eff}) - BIAS_DIFF;
@@ -151,9 +151,7 @@ assign mant_full = fp32_is_zero ? {I_MANT_WIDTH+1{1'b0}} :
 // We need to round mant_full[(I_MANT_WIDTH-1) : (I_MANT_WIDTH - O_MANT_WIDTH)] to O_MANT_WIDTH bits
 
 wire [O_MANT_WIDTH:0] mant_for_round;  // O_MANT_WIDTH + 1 bits for rounding
-assign mant_for_round = (I_MANT_WIDTH >= O_MANT_WIDTH) ?
-                        mant_full[I_MANT_WIDTH : I_MANT_WIDTH - O_MANT_WIDTH] :
-                        {mant_full, {O_MANT_WIDTH - I_MANT_WIDTH{1'b0}}};
+assign mant_for_round = mant_full[I_MANT_WIDTH : I_MANT_WIDTH - O_MANT_WIDTH];  // bits [23:14]
 
 // mant_for_round[O_MANT_WIDTH] is the round bit
 // mant_for_round[O_MANT_WIDTH-1:0] is the mantissa to keep

@@ -91,10 +91,9 @@ wire [I_MANT_WIDTH-1:0]               denorm_mant_shifted;
 wire [$clog2(I_MANT_WIDTH):0]         denorm_shift_count;
 wire [O_MANT_WIDTH-1:0]                denorm_fp32_mant;
 
-genvar i;
-generate
     // Count leading zeros in mantissa to determine shift
     reg [$clog2(I_MANT_WIDTH):0] shift_cnt;
+    integer i;
     always @* begin
         shift_cnt = I_MANT_WIDTH;
         for (i = 0; i < I_MANT_WIDTH; i = i + 1) begin
@@ -115,7 +114,6 @@ generate
 
     // Denorm fp32 mantissa: shifted mantissa with 13 zero bits appended
     assign denorm_fp32_mant = {denorm_mant_shifted, {O_MANT_WIDTH-I_MANT_WIDTH{1'b0}}};
-endgenerate
 
 // -----------------------------------------------------------------
 // Final output assignment

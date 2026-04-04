@@ -71,8 +71,8 @@ module fp16_to_fp17
 
     // Output unpacked signals
     wire        o_sign;
-    wire [O_EXPO_WIDTH-1:0] o_expo;
-    wire [O_MANT_WIDTH-1:0] o_mant;
+    reg [O_EXPO_WIDTH-1:0] o_expo;
+    reg [O_MANT_WIDTH-1:0] o_mant;
 
     // Special case flags
     wire        is_zero;
