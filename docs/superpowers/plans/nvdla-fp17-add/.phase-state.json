@@ -13,33 +13,38 @@
     "spec": "docs/superpowers/specs/2026-04-04-nvdla-fp17-add-design.md",
     "c_reference": "cmod/hls/include/nvdla_float.h",
     "rtl": "vmod/vlibs/fp17_add.v",
-    "dpi_report": null
+    "dpi_report": null,
+    "testbench": "verif/fp17_add_dpi/fp17_add_tb.v"
   },
   "notes": {
-    "lint": "iverilog via Docker esolang/verilog - all VLIBS pass",
-    "commit": "bd5b52e",
-    "completed_modules": [
-      "fp16_add.v", "fp16_sub.v", "fp16_mul.v", "fp16_max.v", "fp16_min.v",
-      "fp16_to_fp17.v", "fp16_to_fp32.v",
-      "fp17_add.v", "fp17_sub.v", "fp17_mul.v", "fp17_max.v", "fp17_min.v",
-      "fp17_to_fp16.v", "fp17_to_fp32.v",
-      "fp32_add.v", "fp32_sub.v", "fp32_mul.v",
-      "fp32_to_fp16.v", "fp32_to_fp17.v",
-      "uint16_to_fp17.v"
-    ],
-    "reg_files": [
-      "NV_NVDLA_BDMA_reg.v",
-      "NV_NVDLA_CDMA_reg.v"
-    ],
-    "lint_fixes": [
-      "fp*_mul.v: part-select with -: operator",
-      "fp*_to_*.v: wire to reg conversion",
-      "fp16_to_fp32.v: integer declaration",
-      "fp17_to_fp32.v, fp32_to_fp17.v: size cast fixes",
-      "NV_NVDLA_CDMA_reg.v: wire to reg"
-    ],
-    "remaining_work": "Core modules (BDMA, CDMA, CSC, etc.) datapath conversion - requires team-months"
+    "lint": "iverilog via Docker esolang/verilog - all VLIBS pass with warnings only",
+    "commit": "c158b8e",
+    "completed_modules": {
+      "vlibs": [
+        "fp16_add.v", "fp16_sub.v", "fp16_mul.v", "fp16_max.v", "fp16_min.v",
+        "fp16_to_fp17.v", "fp16_to_fp32.v",
+        "fp17_add.v", "fp17_sub.v", "fp17_mul.v", "fp17_max.v", "fp17_min.v",
+        "fp17_to_fp16.v", "fp17_to_fp32.v",
+        "fp32_add.v", "fp32_sub.v", "fp32_mul.v",
+        "fp32_to_fp16.v", "fp32_to_fp17.v",
+        "uint16_to_fp17.v"
+      ],
+      "hls_wrappers": [
+        "csc_hls_wrapper.v",
+        "cdp_icvt_wrapper.v", "cdp_ocvt_wrapper.v",
+        "pdp_hls_wrapper.v", "sdp_hls_wrapper.v"
+      ],
+      "reg_files": [
+        "NV_NVDLA_BDMA_reg.v",
+        "NV_NVDLA_CDMA_reg.v"
+      ]
+    },
+    "verification": {
+      "docker_image": "esolang/verilog",
+      "testbench": "verif/fp17_add_dpi - Icarus Verilog simulation runs successfully"
+    },
+    "remaining_work": "Full DPI verification with C reference, Core modules conversion"
   },
   "created_at": "2026-04-04T00:00:00Z",
-  "updated_at": "2026-04-04T12:00:00Z"
+  "updated_at": "2026-04-04T14:00:00Z"
 }
