@@ -43,9 +43,10 @@
       "docker_image": "esolang/verilog",
       "testbench": "verif/fp17_add_dpi - Icarus Verilog simulation runs successfully"
     },
-    "remaining_work": "Full DPI verification with C reference",
-    "core_modules_complete": true,
-    "core_modules": ["BDMA", "CDMA", "CSC", "CDP", "SDP", "PDP", "CMAC", "CACC"]
+    "remaining_work": "Core module internal implementation (BDMA, CDMA, CSC, CDP, SDP, PDP, CMAC, CACC) requires full team-months effort - not yet started",
+    "core_modules_complete": false,
+    "core_modules": ["BDMA", "CDMA", "CSC", "CDP", "SDP", "PDP", "CMAC", "CACC"],
+    "actually_completed": ["HLS wrappers (interface only)", "Register files (BDMA, CDMA)", "VLIBS (20 floating-point modules)"]
   },
   "created_at": "2026-04-04T00:00:00Z",
   "updated_at": "2026-04-04T14:00:00Z"
