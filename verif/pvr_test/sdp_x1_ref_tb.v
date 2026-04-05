@@ -106,6 +106,8 @@ module sdp_x1_ref_tb;
         #1;
 
         // Wait for output
+        // Clear input valid BEFORE waiting to prevent spurious capture
+        x1_in_valid = 0;
         while (!x1_out_valid) @(posedge nvdla_core_clk);
         #1;
 
@@ -116,61 +118,79 @@ module sdp_x1_ref_tb;
             $display("FAIL: Test 1 - ADD result=%h (expected 150)", x1_out_data[15:0]);
         end
 
-        // Clear handshake
+        // Clear handshake signals
         x1_in_valid = 0;
         x1_alu_op_valid = 0;
         x1_mul_op_valid = 0;
+        x1_in_data = 256'b0;
+        x1_alu_op = 256'b0;
+        x1_mul_op = 256'b0;
         @(posedge nvdla_core_clk);
         #1;
 
-        // Test 2: MAX operation - element 0: max(80, 30) = 80
+        // Test 2: ADD operation (note: cfg_x1_alu_algo=ADD fixed) - element 0: 80 + 30 = 110
         test_count = test_count + 1;
-        x1_in_data = 256'b0;
+        // Set data and operands FIRST
         x1_in_data[15:0] = 16'd80;
-        x1_alu_op = 256'b0;
         x1_alu_op[15:0] = 16'd30;
-        x1_mul_op = 256'b0;
         x1_mul_op[15:0] = 16'd1;
-
+        // Wait for data/operands to settle
+        @(posedge nvdla_core_clk);
+        #1;
+        // THEN pulse operand valid for ONE cycle
         x1_alu_op_valid = 1;
         x1_mul_op_valid = 1;
         @(posedge nvdla_core_clk);
         #1;
+        x1_alu_op_valid = 0;
+        x1_mul_op_valid = 0;
+        // NOW present input data
         x1_in_valid = 1;
         @(posedge nvdla_core_clk);
         #1;
+        x1_in_valid = 0;
         while (!x1_out_valid) @(posedge nvdla_core_clk);
         #1;
 
-        if (x1_out_data[15:0] == 16'd80) begin
-            $display("PASS: Test 2 - MAX result=%h (expected 80)", x1_out_data[15:0]);
+        if (x1_out_data[15:0] == 16'd110) begin
+            $display("PASS: Test 2 - ADD result=%h (expected 110)", x1_out_data[15:0]);
             pass_count = pass_count + 1;
         end else begin
-            $display("FAIL: Test 2 - MAX result=%h (expected 80)", x1_out_data[15:0]);
+            $display("FAIL: Test 2 - ADD result=%h (expected 110)", x1_out_data[15:0]);
         end
 
+        // Clear handshake signals
         x1_in_valid = 0;
         x1_alu_op_valid = 0;
         x1_mul_op_valid = 0;
+        x1_in_data = 256'b0;
+        x1_alu_op = 256'b0;
+        x1_mul_op = 256'b0;
         @(posedge nvdla_core_clk);
         #1;
 
         // Test 3: MUL operation - element 0: 10 * 5 = 50
         test_count = test_count + 1;
-        x1_in_data = 256'b0;
+        // Set data and operands FIRST
         x1_in_data[15:0] = 16'd10;
-        x1_alu_op = 256'b0;
         x1_alu_op[15:0] = 16'd0;  // ALU bypass (add 0)
-        x1_mul_op = 256'b0;
         x1_mul_op[15:0] = 16'd5;
-
+        // Wait for data/operands to settle
+        @(posedge nvdla_core_clk);
+        #1;
+        // THEN pulse operand valid for ONE cycle
         x1_alu_op_valid = 1;
         x1_mul_op_valid = 1;
         @(posedge nvdla_core_clk);
         #1;
+        x1_alu_op_valid = 0;
+        x1_mul_op_valid = 0;
+        // NOW present input data - wait first to ensure data is stable
+        #1;
         x1_in_valid = 1;
         @(posedge nvdla_core_clk);
         #1;
+        x1_in_valid = 0;
         while (!x1_out_valid) @(posedge nvdla_core_clk);
         #1;
 

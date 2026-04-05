@@ -66,13 +66,21 @@ module sdp_x1_ref (
     reg [255:0] mul_op_reg;
 
     // State transition
+    reg just_exited_running;
+    reg prev_out_ready;
     always @(posedge nvdla_core_clk or negedge nvdla_core_rstn) begin
         if (!nvdla_core_rstn) begin
             state_q <= 1'b0;
+            just_exited_running <= 1'b0;
+            prev_out_ready <= 1'b0;
         end else begin
+            // just_exited_running: pulse high when transitioning RUNNING->IDLE via out_ready
+            just_exited_running <= (state_q == 1'b1) && x1_out_ready && !prev_out_ready;
+            prev_out_ready <= x1_out_ready;
             case (state_q)
                 1'b0: begin  // IDLE
-                    if (x1_in_valid) begin
+                    // Only capture if we're stably in IDLE (not transitioning from RUNNING)
+                    if (x1_in_valid && !just_exited_running) begin
                         data_in_reg <= x1_in_data;
                         state_q <= 1'b1;
                     end
