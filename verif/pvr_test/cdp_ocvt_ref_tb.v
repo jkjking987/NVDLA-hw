@@ -74,7 +74,7 @@ module cdp_ocvt_ref_tb;
 
         // Test 1: Basic INT16 operation
         // Input: 100, ALU: -10, MUL: *2, TRUNCATE: >>4
-        // ALU: 100-10=90, MUL: 90*2=180, TRUNCATE: 180>>4=11
+        // ALU: 100-10=90, MUL: 90*2=180, TRUNCATE: 180>>4=11 (0xb)
         test_count = test_count + 1;
         chn_data_in = 50'd100;
         chn_data_in_vld = 1;
@@ -82,19 +82,18 @@ module cdp_ocvt_ref_tb;
         while (!chn_data_in_rdy) @(posedge nvdla_core_clk);
         chn_data_in_vld = 0;
 
-        // Wait for output using level-sensitive loop
         while (!chn_data_out_vld) @(posedge nvdla_core_clk);
         #1;
-        if (chn_data_out == 16'd11) begin
-            $display("PASS: Test 1 - OCVT result=%h (expected 11)", chn_data_out);
+        if (chn_data_out == 16'hb) begin
+            $display("PASS: Test 1 - OCVT result=%h (expected b)", chn_data_out);
             pass_count = pass_count + 1;
         end else begin
-            $display("FAIL: Test 1 - OCVT result=%h (expected 11)", chn_data_out);
+            $display("FAIL: Test 1 - OCVT result=%h (expected b)", chn_data_out);
         end
 
         // Test 2: Another value
         // Input: 200, ALU: -10, MUL: *2, TRUNCATE: >>4
-        // ALU: 200-10=190, MUL: 190*2=380, TRUNCATE: 380>>4=23
+        // ALU: 200-10=190, MUL: 190*2=380, TRUNCATE: 380>>4=23 (0x17)
         test_count = test_count + 1;
         chn_data_in = 50'd200;
         chn_data_in_vld = 1;
@@ -104,11 +103,11 @@ module cdp_ocvt_ref_tb;
 
         while (!chn_data_out_vld) @(posedge nvdla_core_clk);
         #1;
-        if (chn_data_out == 16'd23) begin
-            $display("PASS: Test 2 - OCVT result=%h (expected 23)", chn_data_out);
+        if (chn_data_out == 16'h17) begin
+            $display("PASS: Test 2 - OCVT result=%h (expected 17)", chn_data_out);
             pass_count = pass_count + 1;
         end else begin
-            $display("FAIL: Test 2 - OCVT result=%h (expected 23)", chn_data_out);
+            $display("FAIL: Test 2 - OCVT result=%h (expected 17)", chn_data_out);
         end
 
         $display("========================================");

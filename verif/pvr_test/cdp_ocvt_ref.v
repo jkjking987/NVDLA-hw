@@ -79,4 +79,9 @@ module cdp_ocvt_ref (
     assign chn_data_out_sat = 2'b0;
     assign chn_data_out_vld = valid_q;
 
+    always @(posedge nvdla_core_clk) begin
+        $display("OCVT DEBUG: rstn=%b in_vld=%b in_rdy=%b valid_q=%b out_vld=%b out_rdy=%b data_in=%h",
+                 nvdla_core_rstn, chn_data_in_vld, chn_data_in_rdy, valid_q, chn_data_out_vld, chn_data_out_rdy, data_in_reg);
+    end
+
 endmodule
