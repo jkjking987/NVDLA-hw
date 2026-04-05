@@ -19,9 +19,9 @@
   "notes": {
     "scope": "8 modules: BDMA, CDMA, CSC, CDP, SDP, PDP, CMAC, CACC",
     "total_new_rtl_files": 54,
-    "commit": "3f7055b, ff4d8a7, 05ce96a, a5b733d, 70e856d",
-    "verification_status": "Partial - Lint pass, BDMA PVR 2/2 pass, CDP ICVT PVR 2/2 pass, SDP X1 ADD pass, CDP OCVT WIP (timing issues)",
-    "remaining_work": "CDP OCVT fix, SDP X1 MAX/MUL fix, remaining module PVR refs; Full DPI blocked"
+    "commit": "3f7055b, ff4d8a7, 05ce96a, a5b733d, 70e856d, c4c8da1",
+    "verification_status": "Partial - Lint pass, BDMA PVR 2/2 pass, CDP ICVT PVR 2/2 pass, SDP X1 ADD pass, CDP OCVT untested (Docker slow)",
+    "remaining_work": "CDP OCVT test, SDP X1 MAX/MUL fix, remaining module PVR refs; Full DPI blocked"
   },
   "created_at": "2026-04-05T00:00:00Z",
   "updated_at": "2026-04-05T04:00:00Z"
