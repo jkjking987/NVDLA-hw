@@ -68,9 +68,12 @@ module cdp_ocvt_ref (
     assign chn_data_in_rdy = !valid_q || (chn_data_out_vld && chn_data_out_rdy);
 
     // Compute result (combinational)
+    // For INT16: ALU (33b) * MUL (16b) = result
+    // The result fits in lower bits; use lower 16 bits shifted
     wire [32:0] alu_out = {1'b0, data_in_reg[32:0]} - {1'b0, alu_in_reg};
     wire [48:0] mul_out = $signed(alu_out) * $signed(mul_in_reg);
-    wire [15:0] truncate_out = mul_out[48:33] >> truncate_reg;
+    // Use lower bits of multiplication result
+    wire [15:0] truncate_out = mul_out[15:0] >> truncate_reg;
 
     assign chn_data_out = truncate_out;
     assign chn_data_out_sat = 2'b0;
