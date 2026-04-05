@@ -181,14 +181,15 @@ assign data_msb = data_in[15:8]; // Upper pixel
 //===============================================================
 // ALU STAGE - Subtraction of offset
 //===============================================================
-// For INT8: subtract offset from each 8-bit pixel (sign-extended to 9 bits)
-assign alu_out_lsb = $signed({1'b0, data_lsb}) - $signed({1'b0, alu_in[7:0]});
-assign alu_out_msb = $signed({1'b0, data_msb}) - $signed({1'b0, alu_in[15:8]});
+/* verilator lint_off WIDTHEXPAND */
+assign alu_out_lsb = $signed({1'b0, data_lsb[7:0]}) - $signed({1'b0, alu_in[7:0]});
+assign alu_out_msb = $signed({1'b0, data_msb[7:0]}) - $signed({1'b0, alu_in[15:8]});
+/* verilator lint_on WIDTHEXPAND */
 
 // For INT16: subtract offset from 16-bit data (sign-extended to 17 bits)
 // For FP16: pass through (no conversion in ALU stage based on C model)
-wire [16:0] alu_out_int16;
-assign alu_out_int16 = $signed({1'b0, data_in}) - $signed({1'b0, alu_in});
+wire signed [16:0] alu_out_int16;
+assign alu_out_int16 = $signed({{1'b0, data_in[15:0]}}) - $signed({{1'b0, alu_in[15:0]}});
 
 //===============================================================
 // MUL STAGE - Multiplication by scale
@@ -212,6 +213,8 @@ assign mul_result_int16 = $signed({{17{alu_out_int16[16]}}, alu_out_int16}) * $s
 
 // For INT8 output: 34-bit -> 17-bit right shift
 // Fixed for Verilator: replaced variable replication with for-loop approach
+/* verilator lint_off WIDTHEXPAND */
+/* verilator lint_off WIDTHTRUNC */
 function [16:0] arith_right_shift_34to17;
   input [33:0] data;
   input [4:0]  shift;
@@ -244,6 +247,8 @@ function [16:0] arith_right_shift_34to17;
     arith_right_shift_34to17 = result[16:0];
   end
 endfunction
+/* verilator lint_on WIDTHTRUNC */
+/* verilator lint_on WIDTHEXPAND */
 
 assign trunc_out_lsb = arith_right_shift_34to17(mul_result_lsb, truncate_shift, mul_result_lsb[33]);
 assign trunc_out_msb = arith_right_shift_34to17(mul_result_msb, truncate_shift, mul_result_msb[33]);
@@ -263,13 +268,13 @@ always @(*) begin
       out_data = {trunc_out_msb[8:0], trunc_out_lsb[8:0]};
     end
     2'b01: begin // INT16 mode
-      // Output: trunc_out_int16[16:0] = 17 bits
-      out_data = trunc_out_int16[16:0];
+      // Output: sign-extend 17-bit to 18-bit
+      out_data = {{1{trunc_out_int16[16]}}, trunc_out_int16[16:0]};
     end
     2'b10: begin // FP16 mode
       // For FP16: Pass through input as fp17 (expand from 16 to 17 bits)
       // The C model shows fp16 to fp17 conversion
-      out_data = {1'b0, data_in};  // fp16 -> fp17 by adding 1 bit
+      out_data = {2'b0, data_in[15:0]};  // fp16 -> fp17 by adding 2 zero bits
     end
     default: begin
       out_data = 18'h0;
