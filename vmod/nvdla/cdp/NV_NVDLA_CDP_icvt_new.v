@@ -187,19 +187,22 @@ assign alu_out_msb = $signed({1'b0, data_msb}) - $signed({1'b0, alu_in[15:8]});
 
 // For INT16: subtract offset from 16-bit data (sign-extended to 17 bits)
 // For FP16: pass through (no conversion in ALU stage based on C model)
+wire [16:0] alu_out_int16;
+assign alu_out_int16 = $signed({1'b0, data_in}) - $signed({1'b0, alu_in});
 
 //===============================================================
 // MUL STAGE - Multiplication by scale
 //===============================================================
 wire   [33:0] mul_result_lsb;
 wire   [33:0] mul_result_msb;
+wire   [33:0] mul_result_int16;
 
 // INT8 mode: multiply 9-bit ALU output by 16-bit scale
 assign mul_result_lsb = $signed({{9{alu_out_lsb[16]}}, alu_out_lsb}) * $signed({{17{alu_in[15]}}, mul_in});
 assign mul_result_msb = $signed({{9{alu_out_msb[16]}}, alu_out_msb}) * $signed({{17{alu_in[15]}}, mul_in});
 
-// For INT16/FP16 - use full 17-bit ALU result
-// Note: Simplified implementation - actual HLS code has more complex handling
+// INT16 mode: multiply 17-bit ALU output by 16-bit scale
+assign mul_result_int16 = $signed({{17{alu_out_int16[16]}}, alu_out_int16}) * $signed({{17{alu_in[15]}}, mul_in});
 
 //===============================================================
 // TRUNCATE STAGE - Right shift with saturation
@@ -245,6 +248,10 @@ endfunction
 assign trunc_out_lsb = arith_right_shift_34to17(mul_result_lsb, truncate_shift, mul_result_lsb[33]);
 assign trunc_out_msb = arith_right_shift_34to17(mul_result_msb, truncate_shift, mul_result_msb[33]);
 
+// Truncate output for INT16 mode
+wire [16:0] trunc_out_int16;
+assign trunc_out_int16 = arith_right_shift_34to17(mul_result_int16, truncate_shift, mul_result_int16[33]);
+
 //===============================================================
 // OUTPUT GENERATION
 //===============================================================
@@ -256,8 +263,8 @@ always @(*) begin
       out_data = {trunc_out_msb[8:0], trunc_out_lsb[8:0]};
     end
     2'b01: begin // INT16 mode
-      // Output: trunc_out_lsb[16:0] = 17 bits
-      out_data = trunc_out_lsb[16:0];
+      // Output: trunc_out_int16[16:0] = 17 bits
+      out_data = trunc_out_int16[16:0];
     end
     2'b10: begin // FP16 mode
       // For FP16: Pass through input as fp17 (expand from 16 to 17 bits)
