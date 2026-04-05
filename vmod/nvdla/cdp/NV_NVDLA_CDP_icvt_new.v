@@ -208,18 +208,35 @@ assign mul_result_msb = $signed({{9{alu_out_msb[16]}}, alu_out_msb}) * $signed({
 // The C code uses: IntShiftRight<vMulOutHSize, vTruncateHSize, vDataOutHSize>
 
 // For INT8 output: 34-bit -> 17-bit right shift
+// Fixed for Verilator: replaced variable replication with for-loop approach
 function [16:0] arith_right_shift_34to17;
   input [33:0] data;
   input [4:0]  shift;
   input        sign;
   reg   [33:0] result;
+  integer i;
   begin
+    // Initialize result
+    result = 34'b0;
+
     if (shift >= 17) begin
       // If shift >= 17, result is sign extension or zero
-      result = {{17{sign & data[33]}}, {17{1'b0}}};
+      if (sign && data[33]) begin
+        // All 1s for negative
+        for (i = 0; i < 17; i = i + 1) begin
+          result[i] = 1'b1;
+        end
+      end
+      // Lower 17 bits stay 0
     end else begin
-      // Arithmetic right shift
-      result = {{shift{sign & data[33]}}, data[33:shift]};
+      // Arithmetic right shift: fill top 'shift' bits with sign bit
+      for (i = 0; i < shift; i = i + 1) begin
+        result[33 - i] = sign && data[33];
+      end
+      // Copy data[33:shift] to result[33-shift:0]
+      for (i = 0; i < (34 - shift); i = i + 1) begin
+        result[33 - shift - i] = data[33 - i];
+      end
     end
     arith_right_shift_34to17 = result[16:0];
   end
